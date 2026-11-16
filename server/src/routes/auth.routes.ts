@@ -62,13 +62,28 @@ function resolveAllowedFrontendOrigin(requestedOrigin?: string): string {
     'http://localhost:3000',
     'http://localhost:5173',
     'http://127.0.0.1:3000',
+    'https://sync-wave-music.vercel.app',
+    'https://syncwave.velvindevelopers.dpdns.org',
+    'http://syncwave.velvindevelopers.dpdns.org',
     ...(configured ? [configured] : [])
   ]);
 
-  if (requestedOrigin && allowedOrigins.has(requestedOrigin.replace(/\/+$/, ''))) {
-    return requestedOrigin.replace(/\/+$/, '');
+  if (requestedOrigin) {
+    const clean = requestedOrigin.replace(/\/+$/, '');
+    if (
+      allowedOrigins.has(clean) ||
+      clean.endsWith('.vercel.app') ||
+      clean.includes('velvindevelopers.dpdns.org')
+    ) {
+      return clean;
+    }
   }
-  return configured || 'http://localhost:3000';
+  return (
+    configured ||
+    (requestedOrigin && requestedOrigin.includes('velvindevelopers.dpdns.org')
+      ? 'https://syncwave.velvindevelopers.dpdns.org'
+      : 'https://syncwave.velvindevelopers.dpdns.org')
+  );
 }
 
 function resolveBackendCallbackUri(req: Request): string {

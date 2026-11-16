@@ -35,6 +35,9 @@ const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5173',
+  'https://sync-wave-music.vercel.app',
+  'https://syncwave.velvindevelopers.dpdns.org',
+  'http://syncwave.velvindevelopers.dpdns.org',
   ...(configuredFrontend ? [configuredFrontend] : [])
 ]);
 
@@ -44,7 +47,12 @@ app.use(
       // Allow mobile apps, curl, server-to-server or local dev requests with no origin header
       if (!origin) return callback(null, true);
       const cleanOrigin = origin.replace(/\/+$/, '');
-      if (allowedOrigins.has(cleanOrigin) || process.env.NODE_ENV !== 'production') {
+      if (
+        allowedOrigins.has(cleanOrigin) ||
+        cleanOrigin.endsWith('.vercel.app') ||
+        cleanOrigin.includes('velvindevelopers.dpdns.org') ||
+        process.env.NODE_ENV !== 'production'
+      ) {
         return callback(null, true);
       }
       return callback(new Error(`CORS policy does not allow access from origin ${origin}`));
