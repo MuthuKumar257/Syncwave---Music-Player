@@ -252,7 +252,18 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
   },
 
   resetPreferences: async () => {
-    await AsyncStorage.removeItem(ONBOARDING_KEY);
-    set({ hasCompletedOnboarding: false });
+    try {
+      await AsyncStorage.removeItem(ONBOARDING_KEY);
+    } catch {}
+    set({
+      hasCompletedOnboarding: false,
+      selectedLanguages: [],
+      selectedDirectors: [],
+      selectedSingers: [],
+      selectedGenres: [],
+      selectedMoods: [],
+      preferences: null,
+      feed: null
+    });
   }
 }));

@@ -9,7 +9,8 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
-  TextInput
+  TextInput,
+  Image
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -39,7 +40,7 @@ export const LibraryScreen: React.FC = () => {
   } = useLibraryStore();
   const { downloadedTracks, initialize: initDownloads } = useDownloadStore();
   const { playTrack } = usePlayerStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<'LOCAL' | 'PLAYLISTS' | 'FAVORITES' | 'DOWNLOADS'>('LOCAL');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
@@ -47,11 +48,15 @@ export const LibraryScreen: React.FC = () => {
   const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
 
   useEffect(() => {
-    void initLibrary();
-    void syncFavorites();
-    void syncPlaylists();
+    if (isAuthenticated && user?.id) {
+      void initLibrary(user.id);
+      void syncFavorites();
+      void syncPlaylists();
+    } else if (!isAuthenticated) {
+      void initLibrary(null);
+    }
     void initDownloads();
-  }, [initLibrary, syncFavorites, syncPlaylists, initDownloads]);
+  }, [isAuthenticated, user?.id, initLibrary, syncFavorites, syncPlaylists, initDownloads]);
 
   const selectedPlaylist = playlists.find((p) => p.id === selectedPlaylistId);
 
@@ -193,118 +198,93 @@ export const LibraryScreen: React.FC = () => {
             </View>
           ) : (
           <View>
-            {selectedPlaylist ? (
-              <View>
-                <TouchableOpacity
-                  style={styles.backToPlaylistsBtn}
-                  onPress={() => setSelectedPlaylistId(null)}
-                >
-                  <Text style={styles.backToPlaylistsText}>← Back to All Playlists</Text>
-                </TouchableOpacity>
-
-                <View style={styles.playlistDetailHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.playlistDetailTitle}>{selectedPlaylist.name}</Text>
-                    <Text style={styles.playlistDetailMeta}>
-                      {selectedPlaylist.tracks.length} track{selectedPlaylist.tracks.length === 1 ? '' : 's'}
-                    </Text>
-                  </View>
-                  {selectedPlaylist.tracks.length > 0 && (
-                    <TouchableOpacity
-                      style={styles.playAllBtn}
-                      onPress={() => playTrack(selectedPlaylist.tracks[0], selectedPlaylist.tracks)}
-                    >
-                      <Text style={styles.playAllBtnText}>▶ Play All</Text>
-                    </TouchableOpacity>
-                  )}
+            {/* Create Playlist Inline Row */}
+            {isCreatingPlaylist ? (
+              <View style={styles.createPlaylistCard}>
+                <TextInput
+                  style={styles.createInput}
+                  placeholder="Playlist name..."
+                  placeholderTextColor={Colors.textTertiary}
+                  value={newPlaylistTitle}
+                  onChangeText={setNewPlaylistTitle}
+                  autoFocus
+                />
+                <View style={styles.createActions}>
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => {
+                      setIsCreatingPlaylist(false);
+                      setNewPlaylistTitle('');
+                    }}
+                  >
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.confirmBtn} onPress={handleCreatePlaylist}>
+                    <Text style={styles.confirmBtnText}>Create</Text>
+                  </TouchableOpacity>
                 </View>
-
-                {selectedPlaylist.tracks.map((track) => (
-                  <TrackCard
-                    key={track.id}
-                    track={track}
-                    size="row"
-                    context="playlist"
-                    playlistId={selectedPlaylist.id}
-                    onPress={() => playTrack(track, selectedPlaylist.tracks)}
-                  />
-                ))}
-
-                {selectedPlaylist.tracks.length === 0 && (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyTitle}>Empty Playlist</Text>
-                    <Text style={styles.emptySubtitle}>
-                      Use the 3-dot (⋮) menu on any song to save it to this playlist.
-                    </Text>
-                  </View>
-                )}
               </View>
             ) : (
-              <View>
-                {/* Create Playlist Inline Row */}
-                {isCreatingPlaylist ? (
-                  <View style={styles.createPlaylistCard}>
-                    <TextInput
-                      style={styles.createInput}
-                      placeholder="Playlist name..."
-                      placeholderTextColor={Colors.textTertiary}
-                      value={newPlaylistTitle}
-                      onChangeText={setNewPlaylistTitle}
-                      autoFocus
-                    />
-                    <View style={styles.createActions}>
-                      <TouchableOpacity
-                        style={styles.cancelBtn}
-                        onPress={() => {
-                          setIsCreatingPlaylist(false);
-                          setNewPlaylistTitle('');
-                        }}
-                      >
-                        <Text style={styles.cancelBtnText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.confirmBtn} onPress={handleCreatePlaylist}>
-                        <Text style={styles.confirmBtnText}>Create</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.createPlaylistTrigger}
-                    onPress={() => setIsCreatingPlaylist(true)}
-                  >
-                    <Text style={styles.createPlaylistTriggerIcon}>＋</Text>
-                    <Text style={styles.createPlaylistTriggerText}>Create New Playlist</Text>
-                  </TouchableOpacity>
-                )}
+              <TouchableOpacity
+                style={styles.createPlaylistTrigger}
+                onPress={() => setIsCreatingPlaylist(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.createPlaylistTriggerIcon}>＋</Text>
+                <Text style={styles.createPlaylistTriggerText}>Create New Playlist</Text>
+              </TouchableOpacity>
+            )}
 
-                <View style={styles.playlistsGrid}>
-                  {playlists.map((pl) => (
-                    <TouchableOpacity
-                      key={pl.id}
-                      style={styles.playlistCard}
-                      onPress={() => navigation.navigate('PlaylistDetail', { playlistId: pl.id })}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.playlistCardHeader}>
+            {/* Playlists Grid */}
+            {playlists.length > 0 ? (
+              <View style={styles.playlistsGrid}>
+                {playlists.map((pl) => (
+                  <TouchableOpacity
+                    key={pl.id}
+                    style={styles.playlistCard}
+                    onPress={() => navigation.navigate('PlaylistDetail', { playlistId: pl.id })}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.playlistCardHeader}>
+                      {pl.artworkUrl || pl.tracks[0]?.artworkUrl ? (
+                        <Image
+                          source={{ uri: pl.artworkUrl || pl.tracks[0]?.artworkUrl }}
+                          style={styles.playlistCardArtwork}
+                        />
+                      ) : (
                         <View style={styles.playlistCardIcon}>
                           <Text style={styles.playlistCardIconText}>♪</Text>
                         </View>
-                        <TouchableOpacity
-                          onPress={() => handleDeletePlaylist(pl.id, pl.name)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Text style={styles.deletePlaylistText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={styles.playlistCardName} numberOfLines={1}>
-                        {pl.name}
-                      </Text>
-                      <Text style={styles.playlistCardCount}>
-                        {pl.tracks.length} track{pl.tracks.length === 1 ? '' : 's'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => handleDeletePlaylist(pl.id, pl.name)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.deletePlaylistText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.playlistCardName} numberOfLines={1}>
+                      {pl.name}
+                    </Text>
+                    <Text style={styles.playlistCardCount}>
+                      {pl.tracks.length} track{pl.tracks.length === 1 ? '' : 's'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No Playlists Yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Create your first playlist to organize songs, create moods, and schedule your daily listening routines.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { alignSelf: 'center', marginTop: Spacing.sm }]}
+                  onPress={() => setIsCreatingPlaylist(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.confirmBtnText}>＋ Create Playlist</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -362,9 +342,9 @@ export const LibraryScreen: React.FC = () => {
 
             {favoriteTracks.length === 0 && (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>Favorite Tracks</Text>
+                <Text style={styles.emptyTitle}>No Favorite Songs Yet</Text>
                 <Text style={styles.emptySubtitle}>
-                  Tap the heart icon or ⋮ menu on any song to save it here for fast access.
+                  Tap the heart icon (♡) on any song across Home, Discover, or Now Playing to save your favorites here.
                 </Text>
               </View>
             )}
@@ -670,6 +650,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm
+  },
+  playlistCardArtwork: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.control,
+    backgroundColor: Colors.surfaceRaised
   },
   playlistCardIcon: {
     width: 34,

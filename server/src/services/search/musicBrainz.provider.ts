@@ -31,7 +31,7 @@ export class MusicBrainzProvider {
     try {
       const url = `${this.BASE_URL}/recording?query=${encodeURIComponent(query)}&fmt=json&limit=${limit}`;
       const res = await fetch(url, {
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(6000),
         headers: {
           'User-Agent': this.USER_AGENT,
           Accept: 'application/json'
@@ -61,8 +61,12 @@ export class MusicBrainzProvider {
           score: rec.score
         };
       });
-    } catch (err) {
-      console.warn('[MusicBrainz] Search recordings failed:', err);
+    } catch (err: any) {
+      if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+        console.warn(`[MusicBrainz] Search timed out (6s), continuing with remaining sources.`);
+      } else {
+        console.warn('[MusicBrainz] Search recordings failed:', err?.message || err);
+      }
       return [];
     }
   }
@@ -77,7 +81,7 @@ export class MusicBrainzProvider {
       const q = `${query} AND (tag:soundtrack OR type:soundtrack)`;
       const url = `${this.BASE_URL}/release-group?query=${encodeURIComponent(q)}&fmt=json&limit=${limit}`;
       const res = await fetch(url, {
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(6000),
         headers: {
           'User-Agent': this.USER_AGENT,
           Accept: 'application/json'
@@ -102,8 +106,12 @@ export class MusicBrainzProvider {
           type: g['primary-type'] || 'Soundtrack'
         };
       });
-    } catch (err) {
-      console.warn('[MusicBrainz] Search soundtracks failed:', err);
+    } catch (err: any) {
+      if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+        console.warn(`[MusicBrainz] Soundtracks search timed out (6s), continuing with remaining sources.`);
+      } else {
+        console.warn('[MusicBrainz] Search soundtracks failed:', err?.message || err);
+      }
       return [];
     }
   }

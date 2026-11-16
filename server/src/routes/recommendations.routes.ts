@@ -284,7 +284,15 @@ router.post('/recommendations/listening-stat', optionalAuth, async (req: Request
  */
 router.get('/recommendations/listening-history', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getUserId(req);
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Authentication required to retrieve listening history'
+      });
+      return;
+    }
+    const userId = authReq.userId;
     const { history } = await SupabaseHistoryService.getUserPlayHistory(userId, 50);
     const memoryStats = syncStore.getUserSongStats(userId);
 
@@ -325,7 +333,15 @@ router.get('/recommendations/listening-history', optionalAuth, async (req: Reque
  */
 const handleProfileStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getUserId(req);
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Authentication required to view personal profile statistics'
+      });
+      return;
+    }
+    const userId = authReq.userId;
     const stats = await RecommendationEngineService.getProfileStats(userId);
     res.json({
       success: true,

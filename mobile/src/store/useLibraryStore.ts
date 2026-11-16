@@ -33,6 +33,7 @@ interface MobileLibraryState {
   initialize: (userId?: string | null) => Promise<void>;
   switchUser: (userId: string | null) => Promise<void>;
   resetForUser: (userId?: string | null) => Promise<void>;
+  clearAllLibraryData: (userId?: string | null) => Promise<void>;
   toggleFavorite: (track: Track) => Promise<boolean>;
   isFavorite: (trackId: string) => boolean;
   syncFavorites: () => Promise<void>;
@@ -49,14 +50,31 @@ interface MobileLibraryState {
   ) => Promise<void>;
   deletePlaylist: (playlistId: string) => Promise<void>;
   addTrackToPlaylist: (playlistId: string, track: Track) => Promise<boolean>;
+  addTracksToPlaylist: (playlistId: string, tracks: Track[]) => Promise<number>;
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => Promise<void>;
   reorderPlaylistTracks: (playlistId: string, fromIndex: number, toIndex: number) => Promise<void>;
   getPlaylistById: (playlistId: string) => MobilePlaylist | undefined;
+  fetchPlaylistDetails: (playlistId: string) => Promise<MobilePlaylist | null>;
   isInPlaylist: (playlistId: string, trackId: string) => boolean;
 }
 
 const getStorageKey = (userId?: string | null) =>
   `@syncwave_mobile_library_${userId && userId.trim() ? userId.trim() : 'guest'}_v2`;
+
+const getEffectiveUserId = (explicitUserId?: string | null): string | null => {
+  if (explicitUserId !== undefined && explicitUserId !== null && explicitUserId.trim()) {
+    return explicitUserId.trim();
+  }
+  const storeUser = useLibraryStore?.getState?.()?.currentUserId;
+  if (storeUser && storeUser.trim()) return storeUser.trim();
+  try {
+    // Dynamic import to avoid top-level circular dependency with useAuthStore
+    const { useAuthStore } = require('./useAuthStore');
+    const authUser = useAuthStore.getState()?.user;
+    if (authUser?.id) return String(authUser.id).trim();
+  } catch {}
+  return null;
+};
 
 const DEFAULT_PLAYLISTS: MobilePlaylist[] = [
   {
@@ -90,7 +108,7 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
   isInitialized: false,
 
   initialize: async (userId?: string | null) => {
-    const targetUserId = userId !== undefined ? userId : get().currentUserId;
+    const targetUserId = getEffectiveUserId(userId);
     if (!targetUserId) {
       // Guest mode: clear personal favorites and playlists from memory
       set({
@@ -142,17 +160,39 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
   },
 
   resetForUser: async (userId = null) => {
-    const key = getStorageKey(userId || get().currentUserId);
+    const targetUserId = getEffectiveUserId(userId);
+    const key = getStorageKey(targetUserId);
     set({
       favorites: [],
       favoriteTracks: [],
-      playlists: DEFAULT_PLAYLISTS,
+      playlists: [],
       currentUserId: userId,
       isInitialized: false
     });
     try {
       await AsyncStorage.removeItem(key);
     } catch {}
+  },
+
+  clearAllLibraryData: async (userId?: string | null) => {
+    const targetUserId = getEffectiveUserId(userId);
+    if (targetUserId) {
+      try {
+        await AsyncStorage.removeItem(getStorageKey(targetUserId));
+      } catch {}
+    }
+    try {
+      await AsyncStorage.removeItem(getStorageKey('guest'));
+      await AsyncStorage.removeItem(getStorageKey(null));
+    } catch {}
+
+    set({
+      favorites: [],
+      favoriteTracks: [],
+      playlists: [],
+      currentUserId: null,
+      isInitialized: true
+    });
   },
 
   toggleFavorite: async (track: Track): Promise<boolean> => {
@@ -165,15 +205,16 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
       nextFavorites = get().favorites.filter((id) => id !== track.id);
       nextFavoriteTracks = get().favoriteTracks.filter((t) => t.id !== track.id);
     } else {
-      // Prepend to favourites (newest favourited first)
+      // Prepend to favourites (newest favourited first, deduplicate)
       nextFavorites = [track.id, ...get().favorites.filter((id) => id !== track.id)];
       nextFavoriteTracks = [track, ...get().favoriteTracks.filter((t) => t.id !== track.id)];
     }
 
     set({ favorites: nextFavorites, favoriteTracks: nextFavoriteTracks });
 
-    // Persist to user-scoped storage
-    const storageKey = getStorageKey(get().currentUserId);
+    // Persist to user-scoped storage immediately
+    const targetUserId = getEffectiveUserId(get().currentUserId);
+    const storageKey = getStorageKey(targetUserId);
     try {
       await AsyncStorage.setItem(
         storageKey,
@@ -187,7 +228,9 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
 
     // Synchronize with server if logged in
     try {
-      await apiClient.post(`/api/favorites/${encodeURIComponent(track.id)}`);
+      await apiClient.post(`/api/favorites/${encodeURIComponent(track.id)}`, {
+        track
+      });
     } catch {
       // Non-blocking offline support
     }
@@ -200,57 +243,93 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
   },
 
   syncFavorites: async (): Promise<void> => {
+    const targetUserId = getEffectiveUserId(get().currentUserId);
+    if (!targetUserId) return;
+
     try {
-      const res = await apiClient.get<{ success: boolean; data: string[] }>('/api/favorites');
-      if (res.data.success && Array.isArray(res.data.data)) {
+      const res = await apiClient.get<{
+        success: boolean;
+        count: number;
+        data: string[];
+        songs?: Track[];
+      }>('/api/favorites');
+
+      if (res.data?.success && Array.isArray(res.data?.data)) {
         const cloudFavIds = res.data.data;
         const localFavs = get().favorites;
-        const localTracksMap = new Map<string, Track>(get().favoriteTracks.map((t) => [t.id, t]));
+        const localTracksMap = new Map<string, Track>();
+
+        // 1. Existing local favoriteTracks
+        for (const t of get().favoriteTracks) {
+          if (t?.id) localTracksMap.set(t.id, t);
+        }
+
+        // 2. Server returned populated songs
+        if (Array.isArray(res.data.songs)) {
+          for (const s of res.data.songs) {
+            if (s?.id) localTracksMap.set(s.id, s);
+          }
+        }
+
+        // 3. Local music store tracks if available
+        try {
+          const { useLocalMusicStore } = require('./useLocalMusicStore');
+          const locals = useLocalMusicStore.getState()?.localTracks || [];
+          for (const l of locals) {
+            if (l?.id && !localTracksMap.has(l.id)) localTracksMap.set(l.id, l);
+          }
+        } catch {}
 
         // Combine IDs preserving recent order
         const mergedIds = Array.from(new Set([...localFavs, ...cloudFavIds]));
 
-        // Ensure we retain or fetch tracks for every ID
-        const resolvedTracks: Track[] = [];
-        const missingIds: string[] = [];
+        // Check for missing tracks
+        const missingIds = mergedIds.filter((id) => !localTracksMap.has(id));
 
-        for (const id of mergedIds) {
-          const existing = localTracksMap.get(id);
-          if (existing) {
-            resolvedTracks.push(existing);
-          } else {
-            missingIds.push(id);
-          }
-        }
-
-        // Fetch metadata for newly synced cloud IDs
         if (missingIds.length > 0) {
           await Promise.allSettled(
-            missingIds.slice(0, 20).map(async (id) => {
+            missingIds.slice(0, 30).map(async (id) => {
               try {
                 const songRes = await apiClient.get<{ success: boolean; data: Track }>(
                   `/api/songs/${encodeURIComponent(id)}`
                 );
-                if (songRes.data.success && songRes.data.data) {
-                  resolvedTracks.push(songRes.data.data);
+                if (songRes.data?.success && songRes.data?.data) {
+                  localTracksMap.set(id, songRes.data.data);
                 }
               } catch {}
             })
           );
         }
 
-        set({ favorites: mergedIds, favoriteTracks: resolvedTracks });
-        const storageKey = getStorageKey(get().currentUserId);
+        // Build resolved tracks in exact mergedIds order
+        const resolvedTracks: Track[] = [];
+        for (const id of mergedIds) {
+          const track = localTracksMap.get(id);
+          if (track) {
+            resolvedTracks.push(track);
+          }
+        }
+
+        // Never clear existing favoriteTracks if network returned only IDs and tracks couldn't be fetched
+        const finalTracks =
+          resolvedTracks.length > 0 ? resolvedTracks : get().favoriteTracks;
+        const finalIds = mergedIds.length > 0 ? mergedIds : get().favorites;
+
+        set({ favorites: finalIds, favoriteTracks: finalTracks });
+
+        const storageKey = getStorageKey(targetUserId);
         await AsyncStorage.setItem(
           storageKey,
           JSON.stringify({
-            favorites: mergedIds,
-            favoriteTracks: resolvedTracks,
+            favorites: finalIds,
+            favoriteTracks: finalTracks,
             playlists: get().playlists
           })
         );
       }
-    } catch {}
+    } catch {
+      // Offline: retain current favorites
+    }
   },
 
   syncPlaylists: async (): Promise<void> => {
@@ -446,6 +525,51 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     return true;
   },
 
+  addTracksToPlaylist: async (playlistId: string, tracks: Track[]): Promise<number> => {
+    const pl = get().playlists.find((p) => p.id === playlistId);
+    if (!pl || !tracks || tracks.length === 0) return 0;
+
+    const existingIds = new Set(pl.trackIds);
+    const newTracks = tracks.filter((t) => !existingIds.has(t.id));
+    if (newTracks.length === 0) return 0;
+
+    const updatedTrackIds = [...pl.trackIds, ...newTracks.map((t) => t.id)];
+    const updatedTracks = [...pl.tracks, ...newTracks];
+
+    const updatedPl: MobilePlaylist = {
+      ...pl,
+      trackIds: updatedTrackIds,
+      tracks: updatedTracks,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextPlaylists = get().playlists.map((p) => (p.id === playlistId ? updatedPl : p));
+    set({ playlists: nextPlaylists });
+
+    const storageKey = getStorageKey(get().currentUserId);
+    try {
+      await AsyncStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          favorites: get().favorites,
+          favoriteTracks: get().favoriteTracks,
+          playlists: nextPlaylists
+        })
+      );
+    } catch {}
+
+    // Cloud sync in background
+    try {
+      for (const track of newTracks) {
+        await apiClient.post(`/api/playlists/${encodeURIComponent(playlistId)}/songs`, {
+          songId: track.id
+        }).catch(() => {});
+      }
+    } catch {}
+
+    return newTracks.length;
+  },
+
   removeTrackFromPlaylist: async (playlistId: string, trackId: string): Promise<void> => {
     const pl = get().playlists.find((p) => p.id === playlistId);
     if (!pl) return;
@@ -490,9 +614,7 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     const [movedTrack] = nextTracks.splice(fromIndex, 1);
     nextTracks.splice(toIndex, 0, movedTrack);
 
-    const nextTrackIds = [...pl.trackIds];
-    const [movedId] = nextTrackIds.splice(fromIndex, 1);
-    nextTrackIds.splice(toIndex, 0, movedId);
+    const nextTrackIds = nextTracks.map((t) => t.id);
 
     const updatedPl: MobilePlaylist = {
       ...pl,
@@ -525,6 +647,59 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
 
   getPlaylistById: (playlistId: string): MobilePlaylist | undefined => {
     return get().playlists.find((p) => p.id === playlistId);
+  },
+
+  fetchPlaylistDetails: async (playlistId: string): Promise<MobilePlaylist | null> => {
+    const existing = get().playlists.find((p) => p.id === playlistId);
+    const userId = get().currentUserId;
+
+    if (!userId) return existing || null;
+
+    try {
+      const res = await apiClient.get<{ success: boolean; data: any }>(
+        `/api/playlists/${encodeURIComponent(playlistId)}`
+      );
+      if (res.data.success && res.data.data) {
+        const p = res.data.data;
+        const serverTracks: Track[] = Array.isArray(p.songs) ? p.songs : [];
+        const serverSongIds: string[] = Array.isArray(p.songIds)
+          ? p.songIds
+          : serverTracks.map((t: Track) => t.id);
+
+        const updated: MobilePlaylist = {
+          id: p.id,
+          name: p.name || existing?.name || 'Untitled Playlist',
+          description: p.description !== undefined ? p.description : existing?.description,
+          artworkUrl: p.artworkUrl || existing?.artworkUrl,
+          userId: p.userId || userId,
+          trackIds: serverSongIds.length > 0 ? serverSongIds : (existing?.trackIds || []),
+          tracks: serverTracks.length > 0 ? serverTracks : (existing?.tracks || []),
+          createdAt: p.createdAt || existing?.createdAt || new Date().toISOString(),
+          updatedAt: p.updatedAt || new Date().toISOString()
+        };
+
+        const nextPlaylists = get().playlists.some((item) => item.id === playlistId)
+          ? get().playlists.map((item) => (item.id === playlistId ? updated : item))
+          : [updated, ...get().playlists];
+
+        set({ playlists: nextPlaylists });
+
+        const storageKey = getStorageKey(userId);
+        await AsyncStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            favorites: get().favorites,
+            favoriteTracks: get().favoriteTracks,
+            playlists: nextPlaylists
+          })
+        );
+        return updated;
+      }
+    } catch {
+      // Offline fallback: return existing playlist from memory/AsyncStorage
+    }
+
+    return existing || null;
   },
 
   isInPlaylist: (playlistId: string, trackId: string): boolean => {

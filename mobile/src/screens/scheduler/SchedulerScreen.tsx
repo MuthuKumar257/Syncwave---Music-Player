@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  SafeAreaView
+  SafeAreaView,
+  Switch
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useSchedulerStore } from '../../store/useSchedulerStore';
 import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
@@ -18,7 +20,14 @@ import { Spacing, Radius } from '../../theme/spacing';
 
 export const SchedulerScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const { schedules, initialize, toggleSchedule } = useSchedulerStore();
+
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      void initialize(user.id);
+    }
+  }, [isAuthenticated, user?.id, initialize]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -74,26 +83,31 @@ export const SchedulerScreen: React.FC = () => {
               <Text style={styles.schedulerSectionSubtitle}>
                 Your configured smart transitions will automatically trigger music at exact schedule times.
               </Text>
-              <View style={styles.routineItem}>
-                <Text style={styles.routineTime}>07:00 AM</Text>
-                <View style={styles.routineMeta}>
-                  <Text style={styles.routineTitle}>Morning Energizer</Text>
-                  <Text style={styles.routineDays}>Every Weekday &bull; 30 mins</Text>
+              {schedules.map((routine) => (
+                <View key={routine.id} style={styles.routineItem}>
+                  <Text style={styles.routineTime}>{routine.startTime}</Text>
+                  <View style={styles.routineMeta}>
+                    <Text style={styles.routineTitle}>{routine.name}</Text>
+                    <Text style={styles.routineDays}>
+                      {routine.repeatType} &bull; {routine.targetName}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => void toggleSchedule(routine.id)}
+                    style={[styles.activeTag, !routine.isEnabled && styles.inactiveTag]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.activeTagText, !routine.isEnabled && styles.inactiveTagText]}>
+                      {routine.isEnabled ? 'Active' : 'Off'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.activeTag}>
-                  <Text style={styles.activeTagText}>Active</Text>
+              ))}
+              {schedules.length === 0 && (
+                <View style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}>
+                  <Text style={{ color: Colors.textTertiary, fontSize: 13 }}>No active routines configured.</Text>
                 </View>
-              </View>
-              <View style={styles.routineItem}>
-                <Text style={styles.routineTime}>10:30 PM</Text>
-                <View style={styles.routineMeta}>
-                  <Text style={styles.routineTitle}>Sleep Relaxation Mix</Text>
-                  <Text style={styles.routineDays}>Daily &bull; Gentle Fadeout</Text>
-                </View>
-                <View style={styles.activeTag}>
-                  <Text style={styles.activeTagText}>Active</Text>
-                </View>
-              </View>
+              )}
             </View>
           </View>
         )}
@@ -257,6 +271,12 @@ const styles = StyleSheet.create({
     color: '#22c55e',
     fontSize: 10,
     fontWeight: '700'
+  },
+  inactiveTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)'
+  },
+  inactiveTagText: {
+    color: Colors.textTertiary
   },
   footerSpacing: {
     height: 60

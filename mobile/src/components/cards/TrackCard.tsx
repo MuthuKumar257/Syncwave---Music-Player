@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Track } from '../../api/types';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useLibraryStore } from '../../store/useLibraryStore';
 import { SongMenuButton, SongMenuContext } from '../common/SongContextMenuModal';
 
 interface TrackCardProps {
@@ -27,7 +28,9 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   onTrackDeleted
 }) => {
   const { currentTrack, isPlaying, playTrack } = usePlayerStore();
+  const { isFavorite, toggleFavorite } = useLibraryStore();
   const isCurrent = currentTrack?.id === track.id;
+  const isFav = isFavorite(track.id);
 
   const handlePress = () => {
     if (onPress) {
@@ -35,6 +38,17 @@ export const TrackCard: React.FC<TrackCardProps> = ({
     } else {
       playTrack(track);
     }
+  };
+
+  const handleToggleHeart = async (e?: any) => {
+    e?.stopPropagation?.();
+    const isNowFav = await toggleFavorite(track);
+    Alert.alert(
+      isNowFav ? 'Added to Favorites' : 'Removed from Favorites',
+      isNowFav
+        ? `"${track.title}" has been saved to your favorite songs.`
+        : `"${track.title}" has been removed from your favorites.`
+    );
   };
 
   const minutes = Math.floor(track.durationMs / 60000);
@@ -67,6 +81,16 @@ export const TrackCard: React.FC<TrackCardProps> = ({
         </View>
         <View style={styles.rowRightArea}>
           <Text style={styles.durationText}>{durationStr}</Text>
+          <TouchableOpacity
+            style={styles.heartButton}
+            onPress={handleToggleHeart}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Text style={[styles.heartIcon, isFav ? styles.heartActive : styles.heartInactive]}>
+              {isFav ? '♥' : '♡'}
+            </Text>
+          </TouchableOpacity>
           <SongMenuButton
             track={track}
             context={context}
@@ -109,14 +133,26 @@ export const TrackCard: React.FC<TrackCardProps> = ({
         </Text>
         <View style={styles.tagRow}>
           <Text style={styles.durationSmall}>{durationStr}</Text>
-          <SongMenuButton
-            track={track}
-            context={context}
-            playlistId={playlistId}
-            queueIndex={queueIndex}
-            size="sm"
-            onTrackDeleted={onTrackDeleted}
-          />
+          <View style={styles.tagActions}>
+            <TouchableOpacity
+              style={styles.heartButtonSmall}
+              onPress={handleToggleHeart}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityLabel={isFav ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <Text style={[styles.heartIconSmall, isFav ? styles.heartActive : styles.heartInactive]}>
+                {isFav ? '♥' : '♡'}
+              </Text>
+            </TouchableOpacity>
+            <SongMenuButton
+              track={track}
+              context={context}
+              playlistId={playlistId}
+              queueIndex={queueIndex}
+              size="sm"
+              onTrackDeleted={onTrackDeleted}
+            />
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -231,5 +267,35 @@ const styles = StyleSheet.create({
     ...Typography.monoSmall,
     color: Colors.textTertiary,
     marginRight: 4
+  },
+  heartButton: {
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 2
+  },
+  heartIcon: {
+    fontSize: 18,
+    lineHeight: 20
+  },
+  heartActive: {
+    color: '#EF4444'
+  },
+  heartInactive: {
+    color: Colors.textTertiary
+  },
+  tagActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  heartButtonSmall: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  heartIconSmall: {
+    fontSize: 14,
+    lineHeight: 16
   }
 });

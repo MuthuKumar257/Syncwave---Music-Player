@@ -60,16 +60,22 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const loadStats = useCallback(async () => {
+    if (!isAuthenticated) {
+      setStats(null);
+      return;
+    }
     setIsLoadingStats(true);
     try {
       const data = await recommendationApi.getProfileStats();
-      setStats(data);
+      if (data) {
+        setStats(data);
+      }
     } catch {
       // Fallback safely when offline
     } finally {
       setIsLoadingStats(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -105,6 +111,60 @@ export const ProfileScreen: React.FC = () => {
   const fallbackFavArtist =
     stats?.favouriteArtist?.name || selectedDirectors[0] || selectedSingers[0] || null;
 
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.guestContainer}>
+          <View style={styles.guestHero}>
+            {/* 1. App Logo */}
+            <View style={styles.guestLogoContainer}>
+              <View style={styles.guestLogoCircle}>
+                <Text style={styles.guestLogoIcon}>🌊</Text>
+              </View>
+              <Text style={styles.guestAppName}>SyncWave</Text>
+            </View>
+
+            {/* 2. Welcome Message */}
+            <Text style={styles.guestWelcomeTitle}>Welcome to SyncWave</Text>
+
+            {/* 3. Short Description */}
+            <Text style={styles.guestDescription}>
+              Your intelligent, cross-platform music streaming companion. Discover trending tracks, organize custom playlists, schedule daily routines, and enjoy high-fidelity audio playback.
+            </Text>
+
+            {/* 4. Action Buttons */}
+            <View style={styles.guestActionContainer}>
+              <TouchableOpacity
+                style={styles.guestSignInBtn}
+                onPress={() => navigation.navigate('Login')}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Sign In"
+                testID="guest-sign-in-button"
+              >
+                <Text style={styles.guestSignInBtnText}>Sign In</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.guestSignUpBtn}
+                onPress={() => navigation.navigate('SignUp')}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Sign Up"
+                testID="guest-sign-up-button"
+              >
+                <Text style={styles.guestSignUpBtnText}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Persistent Mini Player */}
+        <MiniPlayer onPress={() => navigation.navigate('FullPlayer')} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -128,105 +188,49 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.userCard}>
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarLetter}>
-              {isAuthenticated ? (user?.displayName || 'S').charAt(0).toUpperCase() : '👤'}
+              {(user?.displayName || 'S').charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={styles.userInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.userName}>
-                {isAuthenticated ? (user?.displayName || 'SyncWave Listener') : 'Guest Listener'}
+                {user?.displayName || 'SyncWave Listener'}
               </Text>
-              {isAuthenticated && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditDisplayName(user?.displayName || '');
-                    setProfileError(null);
-                    setIsEditModalVisible(true);
-                  }}
-                  style={{ padding: 2 }}
-                >
-                  <Text style={{ color: Colors.accent, fontSize: 12, fontWeight: '600' }}>Edit</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                onPress={() => {
+                  setEditDisplayName(user?.displayName || '');
+                  setProfileError(null);
+                  setIsEditModalVisible(true);
+                }}
+                style={{ padding: 2 }}
+              >
+                <Text style={{ color: Colors.accent, fontSize: 12, fontWeight: '600' }}>Edit</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.userType}>
-              {isAuthenticated && user?.email
+              {user?.email
                 ? `${user.email} • ${user.authProvider === 'GOOGLE' ? 'Google' : 'Verified'}`
-                : 'Sign in to access your listening analytics'}
+                : 'Authenticated Account'}
             </Text>
           </View>
-          {isAuthenticated ? (
-            <TouchableOpacity
-              onPress={() => void logout()}
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: Radius.control,
-                borderWidth: 1,
-                borderColor: Colors.hairline,
-              }}
-            >
-              <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
-                Sign out
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Login')}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: Radius.control,
-                backgroundColor: Colors.accent,
-              }}
-            >
-              <Text style={{ color: '#000', fontSize: 12, fontWeight: '700' }}>Sign in</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={() => void logout()}
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: Radius.control,
+              borderWidth: 1,
+              borderColor: Colors.hairline,
+            }}
+          >
+            <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+              Sign out
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {!isAuthenticated ? (
-          /* =========================================
-             CLEAN GUEST PROFILE VIEW
-             Prompt to sign in, with no stale analytics
-             or previous user personal stats.
-             ========================================= */
-          <View>
-            <View style={styles.guestPromptCard}>
-              <Text style={styles.guestPromptTitle}>Sign in to SyncWave</Text>
-              <Text style={styles.guestPromptSubtitle}>
-                Sign in to view your personalized listening statistics, top artists, listening history, and sync your music across all devices.
-              </Text>
-              <View style={styles.guestPromptActions}>
-                <TouchableOpacity
-                  style={styles.guestPromptPrimaryBtn}
-                  onPress={() => navigation.navigate('Login')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.guestPromptPrimaryBtnText}>Sign In</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.guestPromptSecondaryBtn}
-                  onPress={() => navigation.navigate('SignUp')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.guestPromptSecondaryBtnText}>Create Account</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.actionRow} onPress={() => navigation.navigate('Settings')}>
-              <Text style={styles.actionRowTitle}>Audio &amp; Engine Settings</Text>
-              <Text style={styles.chevron}>→</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* =========================================
-             AUTHENTICATED USER ANALYTICS & STATS
-             ========================================= */
-          <View>
-            {/* KPI Stats Summary Row */}
-            <View style={styles.kpiRow}>
+        {/* KPI Stats Summary Row */}
+        <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiValue}>{stats?.summary.totalPlays ?? 0}</Text>
                 <Text style={styles.kpiLabel}>Total Plays</Text>
@@ -457,8 +461,6 @@ export const ProfileScreen: React.FC = () => {
         <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
           <Text style={styles.resetButtonText}>Reset Onboarding &amp; Recommendations</Text>
         </TouchableOpacity>
-        </View>
-        )}
 
         <View style={styles.footerSpacing} />
       </ScrollView>
@@ -878,55 +880,107 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.error
   },
-  guestPromptCard: {
+  guestContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 80,
+  },
+  guestHero: {
+    width: '100%',
+    maxWidth: 380,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.hairline,
     borderRadius: Radius.card,
-    padding: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.xxl,
     alignItems: 'center',
-    marginBottom: Spacing.lg
   },
-  guestPromptTitle: {
-    ...Typography.h2,
+  guestLogoContainer: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  guestLogoCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 2,
+    borderColor: Colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  guestLogoIcon: {
+    fontSize: 34,
+  },
+  guestAppName: {
+    ...Typography.subheading,
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.accent,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  guestWelcomeTitle: {
+    ...Typography.h1,
+    fontSize: 22,
     color: Colors.textPrimary,
     textAlign: 'center',
-    marginBottom: Spacing.xs
+    marginBottom: Spacing.sm,
   },
-  guestPromptSubtitle: {
-    ...Typography.body2,
+  guestDescription: {
+    ...Typography.bodyMedium,
+    fontSize: 14,
+    lineHeight: 20,
     color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: Spacing.lg,
-    paddingHorizontal: Spacing.sm
+    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.xs,
   },
-  guestPromptActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm
+  guestActionContainer: {
+    width: '100%',
+    gap: Spacing.sm,
   },
-  guestPromptPrimaryBtn: {
+  guestSignInBtn: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.control
+    borderRadius: Radius.control,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  guestPromptPrimaryBtnText: {
-    ...Typography.caption,
+  guestSignInBtnText: {
+    ...Typography.bodyMedium,
+    color: '#000000',
     fontWeight: '700',
-    color: '#000000'
+    fontSize: 15,
   },
-  guestPromptSecondaryBtn: {
+  guestSignUpBtn: {
     backgroundColor: Colors.surfaceRaised,
     borderWidth: 1,
     borderColor: Colors.hairline,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.control
+    borderRadius: Radius.control,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  guestPromptSecondaryBtnText: {
-    ...Typography.caption,
+  guestSignUpBtnText: {
+    ...Typography.bodyMedium,
+    color: Colors.textPrimary,
     fontWeight: '600',
-    color: Colors.textPrimary
+    fontSize: 15,
   },
   footerSpacing: {
     height: 60

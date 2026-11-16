@@ -39,6 +39,8 @@ const getStoredToken = (): string | null => {
 const loadCachedStats = (): ProfileStats | null => {
   try {
     if (typeof localStorage === 'undefined') return null;
+    const token = localStorage.getItem('syncwave_token');
+    if (!token) return null;
     const raw = localStorage.getItem(ANALYTICS_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
@@ -70,6 +72,12 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
   lastFetchedAt: null,
 
   fetchStats: async (force = false) => {
+    const token = getStoredToken();
+    if (!token) {
+      set({ stats: null, isLoading: false, error: null });
+      return null;
+    }
+
     const now = Date.now();
     const last = get().lastFetchedAt;
 
@@ -82,10 +90,9 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       return inFlightStatsRequest;
     }
 
-    const token = getStoredToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      Authorization: `Bearer ${token}`
     };
 
     set({ isLoading: !get().stats });
@@ -130,9 +137,14 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
 
   recordPlaybackSession: async (params: RecordPlaybackParams) => {
     const token = getStoredToken();
+    if (!token) {
+      set({ isRecording: false });
+      return;
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      Authorization: `Bearer ${token}`
     };
 
     set({ isRecording: true });
@@ -207,9 +219,11 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
 
   updateTastePreferences: async (updates: Partial<UserMusicPreference>) => {
     const token = getStoredToken();
+    if (!token) return;
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      Authorization: `Bearer ${token}`
     };
 
     try {
@@ -233,6 +247,6 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
         localStorage.removeItem(ANALYTICS_CACHE_KEY);
       }
     } catch {}
-    set({ stats: null, lastFetchedAt: null, error: null });
+    set({ stats: null, lastFetchedAt: null, error: null, isLoading: false, isRecording: false });
   }
 }));

@@ -10,6 +10,13 @@ const getBaseUrl = (): string => {
   return 'http://localhost:3001';
 };
 
+let abortController = new AbortController();
+
+export const cancelPendingUserRequests = () => {
+  abortController.abort();
+  abortController = new AbortController();
+};
+
 export const apiClient = axios.create({
   baseURL: getBaseUrl(),
   timeout: 15000,
@@ -19,6 +26,9 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
+  if (!config.signal) {
+    config.signal = abortController.signal;
+  }
   try {
     const token = await AsyncStorage.getItem('syncwave_auth_token');
     if (token) {

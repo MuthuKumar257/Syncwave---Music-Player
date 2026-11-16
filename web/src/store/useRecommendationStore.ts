@@ -169,6 +169,12 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
   },
 
   fetchPreferences: async () => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+    if (!token) {
+      set({ preferences: null });
+      return;
+    }
+
     try {
       const res = await fetch('/api/users/me/preferences', {
         headers: getAuthHeaders()
@@ -192,6 +198,9 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
   },
 
   updatePreferences: async (updates) => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+    if (!token) return;
+
     try {
       const res = await fetch('/api/users/me/preferences', {
         method: 'PUT',
@@ -214,6 +223,9 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
   },
 
   resetPreferences: async () => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+    if (!token) return;
+
     try {
       const res = await fetch('/api/users/me/preferences/reset', {
         method: 'POST',
@@ -237,10 +249,16 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
   },
 
   recordSongListeningStat: async (stat) => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+    if (!token) return;
+
     try {
       await fetch('/api/recommendations/listening-stat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify(stat)
       });
     } catch {

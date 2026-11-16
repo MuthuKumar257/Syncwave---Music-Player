@@ -59,7 +59,7 @@ export const RootNavigator: React.FC = () => {
   return (
     <>
       <Stack.Navigator
-        initialRouteName={hasCompletedOnboarding ? 'MainTabs' : 'LanguageSelection'}
+        initialRouteName="MainTabs"
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: Colors.background }

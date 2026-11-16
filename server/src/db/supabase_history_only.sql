@@ -51,11 +51,31 @@ CREATE TABLE IF NOT EXISTS public.schedule_history (
 CREATE INDEX IF NOT EXISTS idx_schedule_history_user_time
     ON public.schedule_history (user_id, executed_at DESC);
 
+-- ================================================================
+-- 4. USER FAVORITES TABLE
+-- ================================================================
+CREATE TABLE IF NOT EXISTS public.favorites (
+    id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    target_id VARCHAR(100) NOT NULL,
+    target_type VARCHAR(20) NOT NULL DEFAULT 'SONG',
+    song_title TEXT,
+    artist_name TEXT,
+    artwork_url TEXT,
+    duration_ms BIGINT DEFAULT 0,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, target_id, target_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_favorites_user_time
+    ON public.favorites (user_id, added_at DESC);
+
 -- Enable Row Level Security with permissive policies if using anon key via backend proxy,
 -- or restrict to authenticated / service_role as needed in your Supabase project:
 ALTER TABLE public.play_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.listening_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedule_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
@@ -67,6 +87,9 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'schedule_history' AND policyname = 'syncwave_schedule_history_all') THEN
         CREATE POLICY syncwave_schedule_history_all ON public.schedule_history FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'favorites' AND policyname = 'syncwave_favorites_all') THEN
+        CREATE POLICY syncwave_favorites_all ON public.favorites FOR ALL USING (true) WITH CHECK (true);
     END IF;
 END $$;
 

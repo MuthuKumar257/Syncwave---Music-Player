@@ -24,6 +24,7 @@ interface DownloadState {
   getDownloadProgress: (trackId: string) => number;
   getDownloadError: (trackId: string) => string | undefined;
   resetForGuest: () => void;
+  clearAllDownloads: () => Promise<void>;
 }
 
 export const useDownloadStore = create<DownloadState>((set, get) => ({
@@ -183,5 +184,18 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       downloadErrors: {},
       failedTracks: {}
     });
+  },
+
+  clearAllDownloads: async () => {
+    set({
+      downloadedTracks: [],
+      downloadProgress: {},
+      downloadStatus: {},
+      downloadErrors: {},
+      failedTracks: {}
+    });
+    try {
+      await AsyncStorage.removeItem(DOWNLOADS_KEY);
+    } catch {}
   }
 }));

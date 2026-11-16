@@ -6,12 +6,16 @@ import {
   ScrollView,
   StyleSheet,
   SafeAreaView,
-  Switch
+  Switch,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useRecommendationStore } from '../../store/useRecommendationStore';
+import { useSearchStore } from '../../store/useSearchStore';
+import { clearAllUserData } from '../../utils/userDataCleanup';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
@@ -23,6 +27,37 @@ export const SettingsScreen: React.FC = () => {
   const [crossfadeSec, setCrossfadeSec] = useState(3);
   const [personalizationEnabled, setPersonalizationEnabled] = useState(true);
   const [historyEnabled, setHistoryEnabled] = useState(true);
+  const [isClearing, setIsClearing] = useState(false);
+
+  const handleClearSearchHistory = async () => {
+    await useSearchStore.getState().clearAllSearchHistory();
+    Alert.alert('Search History Cleared', 'Your recent search history has been completely removed.');
+  };
+
+  const handleResetAllUserData = () => {
+    Alert.alert(
+      'Reset All User Data?',
+      'This will permanently delete all playlists, favorites, listening history, search history, scheduled alarms, and personalized recommendations. Public songs will remain available.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset Everything',
+          style: 'destructive',
+          onPress: async () => {
+            setIsClearing(true);
+            try {
+              await clearAllUserData({ notifyBackend: true });
+              Alert.alert('Reset Complete', 'All personal user data has been wiped. Welcome to a fresh SyncWave experience.');
+            } catch (err: any) {
+              Alert.alert('Reset Finished', 'Local user data has been wiped.');
+            } finally {
+              setIsClearing(false);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -124,6 +159,42 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </View>
 
+        {/* Data & Storage Management */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Data & Privacy Management</Text>
+
+          <TouchableOpacity
+            style={styles.settingCard}
+            onPress={handleClearSearchHistory}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingTextContainer}>
+              <Text style={styles.settingTitle}>Clear Search History</Text>
+              <Text style={styles.settingSubtitle}>Remove all recent search queries and cached suggestions</Text>
+            </View>
+            <Text style={[styles.actionText, { color: Colors.accent }]}>Clear</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingCard, { borderColor: Colors.error }]}
+            onPress={handleResetAllUserData}
+            activeOpacity={0.7}
+            disabled={isClearing}
+          >
+            <View style={styles.settingTextContainer}>
+              <Text style={[styles.settingTitle, { color: Colors.error }]}>Reset All User Data & Fresh Start</Text>
+              <Text style={styles.settingSubtitle}>
+                Permanently purge all playlists, favorites, history, schedules, and start fresh
+              </Text>
+            </View>
+            {isClearing ? (
+              <ActivityIndicator size="small" color={Colors.error} />
+            ) : (
+              <Text style={[styles.actionText, { color: Colors.error }]}>Reset</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* About Card */}
         <View style={styles.aboutCard}>
           <Text style={styles.aboutTitle}>SyncWave Music Player</Text>
@@ -201,6 +272,11 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 16,
     color: Colors.textTertiary
+  },
+  actionText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    fontSize: 13
   },
   crossfadeControls: {
     flexDirection: 'row'

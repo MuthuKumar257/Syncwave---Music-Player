@@ -7,7 +7,8 @@ import {
   ScrollView,
   StyleSheet,
   SafeAreaView,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -98,6 +99,17 @@ export const SongDetailScreen: React.FC = () => {
     } else {
       void playTrack(track);
     }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!track) return;
+    const isNowFav = await toggleFavorite(track);
+    Alert.alert(
+      isNowFav ? 'Added to Favorites' : 'Removed from Favorites',
+      isNowFav
+        ? `"${track.title}" has been saved to your favorite songs.`
+        : `"${track.title}" has been removed from your favorites.`
+    );
   };
 
   const formatDuration = (ms: number): string => {
@@ -256,7 +268,7 @@ export const SongDetailScreen: React.FC = () => {
             {/* 3. Favorite */}
             <TouchableOpacity
               style={styles.gridBtn}
-              onPress={() => void toggleFavorite(track)}
+              onPress={handleToggleFavorite}
               activeOpacity={0.7}
             >
               <Text style={[styles.gridIcon, isFav && styles.activeHeart]}>

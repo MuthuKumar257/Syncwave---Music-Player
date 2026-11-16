@@ -84,3 +84,57 @@ export async function shareSongViaWhatsApp(track: ShareTrackPayload): Promise<bo
   await shareSong(track);
   return false;
 }
+
+/**
+ * Generate a canonical permanent share URL for a given playlist ID
+ */
+export function getPlaylistShareUrl(playlistId: string): string {
+  if (!playlistId) return APP_DOMAIN;
+  const cleanId = encodeURIComponent(playlistId.trim());
+  return `${APP_DOMAIN}/playlist/${cleanId}`;
+}
+
+/**
+ * Generate the standard SyncWave share message for a playlist
+ */
+export function getPlaylistShareMessage(playlistName: string, playlistId: string): string {
+  const url = getPlaylistShareUrl(playlistId);
+  return `Listen to the playlist "${playlistName}" on ${APP_NAME}.\n\nListen here: ${url}`;
+}
+
+export interface SharePlaylistPayload {
+  id: string;
+  name: string;
+}
+
+/**
+ * Trigger native share sheet for a playlist
+ */
+export async function sharePlaylist(playlist: SharePlaylistPayload): Promise<{ action: string; activityType?: string | null }> {
+  const url = getPlaylistShareUrl(playlist.id);
+  const message = getPlaylistShareMessage(playlist.name, playlist.id);
+
+  try {
+    const result = await Share.share(
+      Platform.select({
+        ios: {
+          title: playlist.name,
+          message,
+          url
+        },
+        default: {
+          title: playlist.name,
+          message
+        }
+      }),
+      {
+        dialogTitle: `Share "${playlist.name}" on ${APP_NAME}`
+      }
+    );
+    return result as { action: string; activityType?: string | null };
+  } catch (error) {
+    console.warn('[shareUtils] sharePlaylist failed:', error);
+    throw error;
+  }
+}
+

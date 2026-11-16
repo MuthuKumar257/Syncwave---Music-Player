@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useRecommendationStore } from '../../store/useRecommendationStore';
 import { apiClient } from '../../api/client';
 import { Colors } from '../../theme/colors';
 import { Radius, Spacing } from '../../theme/spacing';
@@ -144,7 +145,14 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    navigation.goBack();
+    const { hasCompletedOnboarding } = useRecommendationStore.getState();
+    if (!hasCompletedOnboarding) {
+      navigation.navigate('LanguageSelection');
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('MainTabs');
+    }
   };
 
   const handleVerifyOtp = async () => {
@@ -169,7 +177,14 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    navigation.goBack();
+    const { hasCompletedOnboarding: onboarded } = useRecommendationStore.getState();
+    if (!onboarded) {
+      navigation.navigate('LanguageSelection');
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('MainTabs');
+    }
   };
 
   const handleResendOtp = async () => {

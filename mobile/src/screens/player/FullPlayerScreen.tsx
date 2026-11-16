@@ -16,6 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { usePlaybackSessionStore } from '../../store/usePlaybackSessionStore';
+import { useLibraryStore } from '../../store/useLibraryStore';
 import { SongMenuButton } from '../../components/common/SongContextMenuModal';
 import { shareSong } from '../../utils/shareUtils';
 import { Colors } from '../../theme/colors';
@@ -56,6 +57,20 @@ export const FullPlayerScreen: React.FC = () => {
     usePlaybackSessionStore();
   const activeDevice = devices.find((d) => d.deviceId === activeDeviceId);
   const nextTrack = getNextTrack();
+
+  const { isFavorite, toggleFavorite } = useLibraryStore();
+  const isCurrentFav = currentTrack ? isFavorite(currentTrack.id) : false;
+
+  const handleToggleFavorite = async () => {
+    if (!currentTrack) return;
+    const isNowFav = await toggleFavorite(currentTrack);
+    Alert.alert(
+      isNowFav ? 'Added to Favorites' : 'Removed from Favorites',
+      isNowFav
+        ? `"${currentTrack.title}" has been saved to your favorite songs.`
+        : `"${currentTrack.title}" has been removed from your favorites.`
+    );
+  };
 
   if (!currentTrack) {
     return (
@@ -133,6 +148,16 @@ export const FullPlayerScreen: React.FC = () => {
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={handleToggleFavorite}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ marginRight: 8, padding: 6 }}
+              accessibilityLabel={isCurrentFav ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Text style={{ fontSize: 22, color: isCurrentFav ? '#EF4444' : Colors.textSecondary }}>
+                {isCurrentFav ? '♥' : '♡'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => void shareSong(currentTrack)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

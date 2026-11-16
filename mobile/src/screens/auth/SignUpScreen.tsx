@@ -144,7 +144,7 @@ export const SignUpScreen: React.FC = () => {
       return;
     }
 
-    navigation.goBack();
+    navigation.navigate('LanguageSelection');
   };
 
   const handleVerifyOtp = async () => {
@@ -165,7 +165,7 @@ export const SignUpScreen: React.FC = () => {
       return;
     }
 
-    navigation.goBack();
+    navigation.navigate('LanguageSelection');
   };
 
   const handleResend = async () => {

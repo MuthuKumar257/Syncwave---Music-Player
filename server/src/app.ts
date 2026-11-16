@@ -11,6 +11,7 @@ import discoveryRoutes from './routes/discovery.routes';
 import searchRoutes from './routes/search.routes';
 import recommendationsRoutes from './routes/recommendations.routes';
 import playbackSessionRoutes from './routes/playbackSession.routes';
+import adminRoutes from './routes/admin.routes';
 import { deepLinkRouter } from './routes/deepLink.routes';
 import { SearchAggregatorService } from './services/search/searchAggregator.service';
 import { securityHeadersMiddleware } from './middleware/securityHeaders';
@@ -95,6 +96,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/music', discoveryRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/playback-session', playbackSessionRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api', recommendationsRoutes);
 
 // Direct Universal Search REST Routes

@@ -34,7 +34,7 @@ export class AppleMusicProvider {
 
     try {
       const url = `${this.BASE_URL}/search?term=${encodeURIComponent(query)}&entity=song&limit=${limit}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
       if (!res.ok) return [];
 
       const data: any = await res.json();
@@ -57,8 +57,12 @@ export class AppleMusicProvider {
           genre: item.primaryGenreName
         };
       });
-    } catch (err) {
-      console.warn('[AppleMusicProvider] Track search failed:', err);
+    } catch (err: any) {
+      if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+        console.warn(`[AppleMusicProvider] Track search timed out (7s), continuing with remaining sources.`);
+      } else {
+        console.warn('[AppleMusicProvider] Track search failed:', err?.message || err);
+      }
       return [];
     }
   }
@@ -71,7 +75,7 @@ export class AppleMusicProvider {
 
     try {
       const url = `${this.BASE_URL}/search?term=${encodeURIComponent(query + ' soundtrack')}&entity=album&limit=${limit}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
       if (!res.ok) return [];
 
       const data: any = await res.json();
@@ -92,8 +96,12 @@ export class AppleMusicProvider {
           externalUrl: item.collectionViewUrl || 'https://music.apple.com'
         };
       });
-    } catch (err) {
-      console.warn('[AppleMusicProvider] Soundtrack search failed:', err);
+    } catch (err: any) {
+      if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+        console.warn(`[AppleMusicProvider] Soundtrack search timed out (7s), continuing with remaining sources.`);
+      } else {
+        console.warn('[AppleMusicProvider] Soundtrack search failed:', err?.message || err);
+      }
       return [];
     }
   }

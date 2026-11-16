@@ -1,12 +1,16 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { apiClient } from '../api/client';
+import { apiClient, cancelPendingUserRequests } from '../api/client';
+import { queryClient } from '../api/queryClient';
+import { resetToGuestHome } from '../navigation/navigationService';
 import { useLibraryStore } from './useLibraryStore';
 import { usePlayerStore } from './usePlayerStore';
 import { useRecommendationStore } from './useRecommendationStore';
 import { useDownloadStore } from './useDownloadStore';
 import { usePlaybackSessionStore } from './usePlaybackSessionStore';
+import { useSchedulerStore } from './useSchedulerStore';
+import { useSearchStore } from './useSearchStore';
 
 const TOKEN_KEY = 'syncwave_auth_token';
 const USER_ID_KEY = 'syncwave_user_id';
@@ -85,6 +89,7 @@ const persistSession = async (token: string, user: MobileUserProfile) => {
     [USER_PROFILE_KEY, JSON.stringify(user)],
   ]);
   await useLibraryStore.getState().switchUser(user.id);
+  await useSchedulerStore.getState().switchUser(user.id);
   await useRecommendationStore.getState().initialize();
   void usePlaybackSessionStore.getState().startSessionSync(token);
 };
@@ -361,28 +366,50 @@ export const useAuthStore = create<MobileAuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // 1. Terminate server/cloud session
     try {
       await apiClient.post('/api/auth/logout');
     } catch {}
 
+    // 2. Cancel in-flight user requests
+    cancelPendingUserRequests();
+
+    // 3. Clear React Query cache
+    try {
+      queryClient.clear();
+    } catch {}
+
+    // 4. Clear auth tokens & session profile from AsyncStorage
     await clearSessionStorage();
 
-    // 1. Reset player state and queue safely
+    // 5. Reset player state and queue safely
     await usePlayerStore.getState().resetForGuest();
 
-    // 2. Reset library state (clear in-memory playlists and favorites for guest)
+    // 6. Reset library state (clear in-memory playlists and favorites for guest)
     await useLibraryStore.getState().switchUser(null);
 
-    // 3. Reset recommendation store for clean guest mode (clear user preferences, fetch public songs)
+    // 7. Reset recommendation store for clean guest mode (clear user preferences, fetch public songs)
     await useRecommendationStore.getState().resetForGuest();
 
-    // 4. Stop playback session sync
+    // 8. Stop playback session sync
     void usePlaybackSessionStore.getState().stopSessionSync();
 
-    // 5. Reset download store session state
+    // 9. Reset download store session state (preserving offline files on disk)
     useDownloadStore.getState().resetForGuest();
 
+    // 10. Reset scheduler store for guest
+    await useSchedulerStore.getState().switchUser(null);
+
+    // 11. Reset search store for guest
+    useSearchStore.getState().resetForGuest();
+
+    // 12. Set auth state to guest
     set({ token: null, user: null, isAuthenticated: false });
+
+    // 13. Reset navigation to Guest Home screen
+    try {
+      resetToGuestHome();
+    } catch {}
   },
 
   updateProfile: async (data) => {

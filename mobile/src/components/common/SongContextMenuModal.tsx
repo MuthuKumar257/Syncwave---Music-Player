@@ -79,7 +79,13 @@ export const SongContextMenuModal: React.FC<SongContextMenuModalProps> = ({
   // 4. Toggle Liked Songs
   const handleToggleFavorite = async () => {
     onClose();
-    await toggleFavorite(track);
+    const isNowFav = await toggleFavorite(track);
+    Alert.alert(
+      isNowFav ? 'Added to Favorites' : 'Removed from Favorites',
+      isNowFav
+        ? `"${track.title}" has been saved to your favorite songs.`
+        : `"${track.title}" has been removed from your favorites.`
+    );
   };
 
   // 5. Download / Remove Download

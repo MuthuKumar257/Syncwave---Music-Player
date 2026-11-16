@@ -14,6 +14,8 @@ import {
   Sparkles,
   Award,
   LogIn,
+  UserPlus,
+  Disc3,
   Info,
   Globe,
   Calendar,
@@ -80,8 +82,10 @@ export const ProfileView: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchProfileStats(false);
-    fetchPreferences();
+    if (isAuthenticated) {
+      fetchProfileStats(false);
+      fetchPreferences();
+    }
   }, [fetchProfileStats, fetchPreferences, isAuthenticated]);
 
   const handlePlayRewatchedSong = (item: ProfileSongRewatchStat) => {
@@ -111,6 +115,53 @@ export const ProfileView: React.FC = () => {
       setProfileError(res.error || 'Failed to update profile');
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex-1 overflow-y-auto p-6 md:p-8 flex items-center justify-center select-none min-h-[70vh]">
+        <div className="max-w-md w-full p-8 rounded-card bg-surface border border-hairline text-center space-y-6">
+          {/* 1. App Logo */}
+          <div className="flex flex-col items-center justify-center space-y-3">
+            <div className="w-16 h-16 rounded-2xl bg-surface-elevated border border-accent/40 flex items-center justify-center shadow-lg">
+              <Disc3 className="w-8 h-8 text-accent animate-pulse" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-text-primary">SyncWave</h1>
+          </div>
+
+          {/* 2. Welcome Message */}
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-text-primary">Welcome to SyncWave</h2>
+            {/* 3. Short Description */}
+            <p className="text-sm text-text-muted leading-relaxed">
+              Your intelligent, cross-platform music streaming companion. Discover trending tracks, organize custom playlists, schedule daily routines, and enjoy high-fidelity audio playback.
+            </p>
+          </div>
+
+          {/* 4. Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-control bg-accent text-black font-semibold hover:brightness-110 transition text-sm shadow-sm"
+              data-testid="guest-sign-in-button"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Sign In</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/signup')}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-control bg-surface-elevated hover:bg-surface-hover border border-hairline text-text-primary font-semibold transition text-sm"
+              data-testid="guest-sign-up-button"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Sign Up</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const maxArtistPlays = stats?.topListenedArtists[0]
     ? Math.max(1, stats.topListenedArtists[0].playCount + stats.topListenedArtists[0].replayCount)

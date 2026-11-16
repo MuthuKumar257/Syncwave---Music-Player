@@ -96,8 +96,26 @@ vi.mock('react-native', () => ({
   }
 }));
 
+// react-navigation mock
+vi.mock('@react-navigation/native', () => ({
+  createNavigationContainerRef: () => ({
+    isReady: () => true,
+    reset: vi.fn(),
+    navigate: vi.fn(),
+    goBack: vi.fn(),
+    dispatch: vi.fn()
+  }),
+  useNavigation: () => ({
+    navigate: vi.fn(),
+    goBack: vi.fn(),
+    canGoBack: () => true,
+    reset: vi.fn()
+  })
+}));
+
 // API client mock
 vi.mock('../src/api/client', () => ({
+  cancelPendingUserRequests: vi.fn(),
   apiClient: {
     get: vi.fn().mockResolvedValue({ data: { success: true, data: [] } }),
     post: vi.fn().mockResolvedValue({ data: { success: true, data: {} } }),

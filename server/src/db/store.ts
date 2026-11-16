@@ -300,7 +300,7 @@ class InMemorySyncStore {
     }, 400);
   }
 
-  private seedInitialMusic() {
+  seedInitialMusic(): void {
     const sampleSongs: SongMetadata[] = [
       {
         id: 'sync_seed_1',
@@ -670,16 +670,19 @@ class InMemorySyncStore {
     }
     if (set.has(targetId)) {
       set.delete(targetId);
+      this.persistToDisk();
       return false;
     } else {
+      set.delete(targetId);
       set.add(targetId);
+      this.persistToDisk();
       return true;
     }
   }
 
   getUserFavorites(userId: string): string[] {
     const set = this.favorites.get(userId);
-    return set ? Array.from(set) : [];
+    return set ? Array.from(set).reverse() : [];
   }
 
   isFavorite(userId: string, targetId: string): boolean {

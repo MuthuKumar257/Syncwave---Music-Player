@@ -1,8 +1,11 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UniversalSearchResults, Track } from '../api/types';
 import { searchApi } from '../api/searchApi';
 import { useLocalMusicStore } from './useLocalMusicStore';
 import { useDownloadStore } from './useDownloadStore';
+
+const RECENT_SEARCHES_KEY = '@syncwave_recent_searches';
 
 interface SearchState {
   query: string;
@@ -14,6 +17,7 @@ interface SearchState {
   isSearching: boolean;
 
   // Actions
+  initialize: () => Promise<void>;
   setQuery: (query: string) => void;
   setSelectedPlatform: (platform: string) => void;
   setSelectedLanguage: (language: string) => void;
@@ -21,17 +25,31 @@ interface SearchState {
   fetchSuggestions: (query: string) => Promise<void>;
   addRecentSearch: (query: string) => void;
   clearRecentSearches: () => void;
+  clearAllSearchHistory: () => Promise<void>;
   clearResults: () => void;
+  resetForGuest: () => void;
 }
 
 export const useSearchStore = create<SearchState>((set, get) => ({
   query: '',
   results: null,
   suggestions: [],
-  recentSearches: ['Vaaranam Aayiram', 'Leo', 'Nenjukkul Peidhidum', 'A. R. Rahman', 'Anirudh', 'Sid Sriram'],
+  recentSearches: [],
   selectedPlatform: 'ALL',
   selectedLanguage: 'ALL',
   isSearching: false,
+
+  initialize: async () => {
+    try {
+      const raw = await AsyncStorage.getItem(RECENT_SEARCHES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          set({ recentSearches: parsed });
+        }
+      }
+    } catch {}
+  },
 
   setQuery: (query: string) => {
     set({ query });
@@ -110,10 +128,30 @@ export const useSearchStore = create<SearchState>((set, get) => ({
 
   addRecentSearch: (query: string) => {
     const current = get().recentSearches.filter((item) => item.toLowerCase() !== query.toLowerCase());
-    set({ recentSearches: [query, ...current].slice(0, 10) });
+    const updated = [query, ...current].slice(0, 10);
+    set({ recentSearches: updated });
+    void AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated)).catch(() => {});
   },
 
-  clearRecentSearches: () => set({ recentSearches: [] }),
+  clearRecentSearches: () => {
+    set({ recentSearches: [] });
+    void AsyncStorage.removeItem(RECENT_SEARCHES_KEY).catch(() => {});
+  },
 
-  clearResults: () => set({ results: null, query: '', suggestions: [] })
+  clearAllSearchHistory: async () => {
+    set({ recentSearches: [], query: '', results: null, suggestions: [] });
+    await AsyncStorage.removeItem(RECENT_SEARCHES_KEY).catch(() => {});
+  },
+
+  clearResults: () => set({ results: null, query: '', suggestions: [] }),
+
+  resetForGuest: () => {
+    set({
+      query: '',
+      results: null,
+      suggestions: [],
+      recentSearches: []
+    });
+    void AsyncStorage.removeItem(RECENT_SEARCHES_KEY).catch(() => {});
+  }
 }));

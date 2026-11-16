@@ -1,1 +1,57 @@
-{"users":[["dfffcbb8-8296-4095-a40d-4e3d171b07bd",{"id":"dfffcbb8-8296-4095-a40d-4e3d171b07bd","email":"otp_fail_recovery_v2@syncwave.app","passwordHash":"$2a$12$PZdqbskSnKtvcoMtQPIgzekAeRKgIXAYEcYndgiXZNDpjOMo6qz9K","displayName":"Recovery Tester","authProvider":"EMAIL","emailVerified":true,"welcomeEmailSent":false,"welcomeEmailStatus":"PENDING","createdAt":"2026-11-15T17:20:34.724Z","updatedAt":"2026-11-15T17:20:34.724Z"}]],"songs":[["sync_seed_1",{"id":"sync_seed_1","title":"Morning Focus & Clarity","artist":"SyncWave Ambience","album":"Daily Routines Vol. 1","durationMs":240000,"artworkUrl":"https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=60","source":"SPOTIFY","externalUrl":"https://open.spotify.com","createdAt":"2026-11-15T17:20:19.271Z"}],["sync_seed_2",{"id":"sync_seed_2","title":"High Tempo Workout Beat","artist":"Cardio Flow","album":"Power Routines","durationMs":215000,"artworkUrl":"https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&auto=format&fit=crop&q=60","source":"YOUTUBE","externalUrl":"https://music.youtube.com","createdAt":"2026-11-15T17:20:19.272Z"}],["sync_seed_3",{"id":"sync_seed_3","title":"Midnight Deep Sleep Waves","artist":"Nocturne Acoustics","album":"Dreamstate","durationMs":360000,"artworkUrl":"https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=60","source":"LOCAL","createdAt":"2026-11-15T17:20:19.272Z"}]],"playlists":[],"schedules":[],"scheduleHistory":[],"favorites":[["dfffcbb8-8296-4095-a40d-4e3d171b07bd",[]]],"playHistory":[],"settings":[["dfffcbb8-8296-4095-a40d-4e3d171b07bd",{"userId":"dfffcbb8-8296-4095-a40d-4e3d171b07bd","isDarkMode":true,"crossfadeEnabled":true,"crossfadeDurationSec":3,"playbackSpeed":1,"updatedAt":"2026-11-15T17:20:34.724Z"}]],"userPreferences":[],"listeningEvents":[],"userSongStats":[],"historyIdCounter":1,"eventIdCounter":1}
+{
+  "users": [],
+  "songs": [
+    [
+      "sync_seed_1",
+      {
+        "id": "sync_seed_1",
+        "title": "Morning Focus & Clarity",
+        "artist": "SyncWave Ambience",
+        "album": "Daily Routines Vol. 1",
+        "durationMs": 240000,
+        "artworkUrl": "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=60",
+        "source": "SPOTIFY",
+        "externalUrl": "https://open.spotify.com",
+        "createdAt": "2026-11-16T08:09:22.161Z"
+      }
+    ],
+    [
+      "sync_seed_2",
+      {
+        "id": "sync_seed_2",
+        "title": "High Tempo Workout Beat",
+        "artist": "Cardio Flow",
+        "album": "Power Routines",
+        "durationMs": 215000,
+        "artworkUrl": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&auto=format&fit=crop&q=60",
+        "source": "YOUTUBE",
+        "externalUrl": "https://music.youtube.com",
+        "createdAt": "2026-11-16T08:09:22.162Z"
+      }
+    ],
+    [
+      "sync_seed_3",
+      {
+        "id": "sync_seed_3",
+        "title": "Midnight Deep Sleep Waves",
+        "artist": "Nocturne Acoustics",
+        "album": "Dreamstate",
+        "durationMs": 360000,
+        "artworkUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=60",
+        "source": "LOCAL",
+        "createdAt": "2026-11-16T08:09:22.162Z"
+      }
+    ]
+  ],
+  "playlists": [],
+  "schedules": [],
+  "scheduleHistory": [],
+  "favorites": [],
+  "playHistory": [],
+  "settings": [],
+  "userPreferences": [],
+  "listeningEvents": [],
+  "userSongStats": [],
+  "historyIdCounter": 1,
+  "eventIdCounter": 1
+}

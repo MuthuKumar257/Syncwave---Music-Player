@@ -5,6 +5,11 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { useLibraryStore } from '../store/useLibraryStore';
 import { useRecommendationStore } from '../store/useRecommendationStore';
 import { useDownloadStore } from '../store/useDownloadStore';
+import { useSchedulerStore, MobileSchedule } from '../store/useSchedulerStore';
+import { useSearchStore } from '../store/useSearchStore';
+import { queryClient } from '../api/queryClient';
+import { cancelPendingUserRequests } from '../api/client';
+import { resetToGuestHome } from '../navigation/navigationService';
 import { Track } from '../api/types';
 
 const mockTrackA: Track = {
@@ -116,6 +121,20 @@ describe('Music Player – Clean Guest Mode After Logout & Multi-User Isolation'
       downloadErrors: {},
       failedTracks: {}
     });
+
+    useSchedulerStore.setState({
+      schedules: [],
+      currentUserId: null,
+      isLoading: false,
+      isInitialized: true
+    });
+
+    useSearchStore.setState({
+      query: '',
+      results: null,
+      suggestions: [],
+      recentSearches: []
+    });
   });
 
   describe('1. Logout Behaviour: Session, Memory, Player & Private Data Cleanup', () => {
@@ -191,6 +210,29 @@ describe('Music Player – Clean Guest Mode After Logout & Multi-User Isolation'
       });
       await AsyncStorage.setItem('@syncwave_offline_downloads_v2', JSON.stringify([mockTrackA]));
 
+      // 6. Set up user scheduler routine
+      await useSchedulerStore.getState().switchUser(mockUserA.id);
+      await useSchedulerStore.getState().saveSchedule({
+        id: 'user_a_morning',
+        name: 'User A Alarm',
+        startTime: '06:30',
+        repeatType: 'DAILY',
+        daysOfWeek: [1, 2, 3, 4, 5],
+        targetType: 'PLAYLIST',
+        targetId: 'pl_1',
+        targetName: 'Wake Up',
+        priority: 'HIGH',
+        isEnabled: true,
+        createdAt: new Date().toISOString()
+      });
+      expect(useSchedulerStore.getState().schedules.length).toBeGreaterThan(0);
+
+      // 7. Set up search state
+      useSearchStore.setState({
+        query: 'Uyire',
+        recentSearches: ['Uyire']
+      });
+
       // --- EXECUTE LOGOUT ---
       await useAuthStore.getState().logout();
 
@@ -245,6 +287,16 @@ describe('Music Player – Clean Guest Mode After Logout & Multi-User Isolation'
       expect(downloadState.downloadedTracks).toEqual([mockTrackA]);
       const savedDownloads = await AsyncStorage.getItem('@syncwave_offline_downloads_v2');
       expect(JSON.parse(savedDownloads!)).toEqual([mockTrackA]);
+
+      // Assertions on Scheduler Store (Cleared from memory in Guest Mode):
+      const schedulerState = useSchedulerStore.getState();
+      expect(schedulerState.currentUserId).toBeNull();
+      expect(schedulerState.schedules).toEqual([]);
+
+      // Assertions on Search Store (Cleared from memory in Guest Mode):
+      const searchState = useSearchStore.getState();
+      expect(searchState.query).toBe('');
+      expect(searchState.recentSearches).toEqual([]);
     });
   });
 
@@ -343,49 +395,85 @@ describe('Music Player – Clean Guest Mode After Logout & Multi-User Isolation'
       // Step 1: User A logs in
       useAuthStore.setState({ user: mockUserA, token: 'token_a', isAuthenticated: true });
       await useLibraryStore.getState().switchUser(mockUserA.id);
+      await useSchedulerStore.getState().switchUser(mockUserA.id);
       await useLibraryStore.getState().createPlaylist('User A Workout', [mockTrackA]);
       await useLibraryStore.getState().toggleFavorite(mockTrackA);
+      await useSchedulerStore.getState().saveSchedule({
+        id: 'user_a_sched_1',
+        name: 'User A Routine',
+        startTime: '07:00',
+        repeatType: 'DAILY',
+        daysOfWeek: [1, 2, 3, 4, 5],
+        targetType: 'PLAYLIST',
+        targetId: 'pl_a',
+        targetName: 'User A Workout',
+        priority: 'NORMAL',
+        isEnabled: true,
+        createdAt: new Date().toISOString()
+      });
 
       expect(useLibraryStore.getState().playlists.some((p) => p.name === 'User A Workout')).toBe(true);
       expect(useLibraryStore.getState().isFavorite(mockTrackA.id)).toBe(true);
+      expect(useSchedulerStore.getState().schedules.some((s) => s.name === 'User A Routine')).toBe(true);
 
       // Step 2: User A logs out -> Clean Guest Mode
       await useAuthStore.getState().logout();
       expect(useAuthStore.getState().isAuthenticated).toBe(false);
       expect(useLibraryStore.getState().playlists).toEqual([]);
       expect(useLibraryStore.getState().favorites).toEqual([]);
+      expect(useSchedulerStore.getState().schedules).toEqual([]);
 
       // Step 3: User B logs in
       useAuthStore.setState({ user: mockUserB, token: 'token_b', isAuthenticated: true });
       await useLibraryStore.getState().switchUser(mockUserB.id);
+      await useSchedulerStore.getState().switchUser(mockUserB.id);
 
       // Verify User B sees NO data from User A
       expect(useLibraryStore.getState().playlists.some((p) => p.name === 'User A Workout')).toBe(false);
       expect(useLibraryStore.getState().isFavorite(mockTrackA.id)).toBe(false);
       expect(useLibraryStore.getState().favorites).toEqual([]);
+      expect(useSchedulerStore.getState().schedules.some((s) => s.name === 'User A Routine')).toBe(false);
 
       // User B creates their own data
       await useLibraryStore.getState().createPlaylist('User B Chill Study', [mockTrackB]);
       await useLibraryStore.getState().toggleFavorite(mockTrackB);
+      await useSchedulerStore.getState().saveSchedule({
+        id: 'user_b_sched_2',
+        name: 'User B Focus',
+        startTime: '10:00',
+        repeatType: 'WEEKDAYS',
+        daysOfWeek: [1, 2, 3, 4, 5],
+        targetType: 'PLAYLIST',
+        targetId: 'pl_b',
+        targetName: 'User B Chill Study',
+        priority: 'HIGH',
+        isEnabled: true,
+        createdAt: new Date().toISOString()
+      });
       expect(useLibraryStore.getState().playlists.some((p) => p.name === 'User B Chill Study')).toBe(true);
       expect(useLibraryStore.getState().isFavorite(mockTrackB.id)).toBe(true);
+      expect(useSchedulerStore.getState().schedules.some((s) => s.name === 'User B Focus')).toBe(true);
 
       // Step 4: User B logs out -> Clean Guest Mode
       await useAuthStore.getState().logout();
       expect(useLibraryStore.getState().playlists).toEqual([]);
       expect(useLibraryStore.getState().favorites).toEqual([]);
+      expect(useSchedulerStore.getState().schedules).toEqual([]);
 
       // Step 5: User A logs back in
       useAuthStore.setState({ user: mockUserA, token: 'token_a_new', isAuthenticated: true });
       await useLibraryStore.getState().switchUser(mockUserA.id);
+      await useSchedulerStore.getState().switchUser(mockUserA.id);
 
       // Verify User A original data is completely restored
       expect(useLibraryStore.getState().playlists.some((p) => p.name === 'User A Workout')).toBe(true);
       expect(useLibraryStore.getState().isFavorite(mockTrackA.id)).toBe(true);
+      expect(useSchedulerStore.getState().schedules.some((s) => s.name === 'User A Routine')).toBe(true);
 
       // Verify User A CANNOT see User B data
       expect(useLibraryStore.getState().playlists.some((p) => p.name === 'User B Chill Study')).toBe(false);
       expect(useLibraryStore.getState().isFavorite(mockTrackB.id)).toBe(false);
+      expect(useSchedulerStore.getState().schedules.some((s) => s.name === 'User B Focus')).toBe(false);
     });
   });
 
