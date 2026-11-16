@@ -19,6 +19,9 @@ import { authRateLimiter, generalApiRateLimiter } from './middleware/rateLimiter
 
 export const app = express();
 
+// Trust reverse proxies (Render, Cloudflare, etc.) to correctly resolve req.protocol and client IP
+app.set('trust proxy', 1);
+
 // Security Hardening (High H1): Disable Express fingerprinting header
 app.disable('x-powered-by');
 

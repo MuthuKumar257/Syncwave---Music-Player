@@ -1,0 +1,170 @@
+{
+  "timestamp": "2026-11-16T08:42:32.989Z",
+  "users": [
+    [
+      "21600558-4506-4671-b242-ca4559147662",
+      {
+        "id": "21600558-4506-4671-b242-ca4559147662",
+        "email": "cleanup_test_1794818552585@syncwave.app",
+        "passwordHash": "$2a$12$DEl9q3SNQtJ0t5VllIkh1etaW3vPKaCZrXTB9fWEpr89Pvf5EuTE.",
+        "displayName": "Cleanup Target User",
+        "authProvider": "EMAIL",
+        "emailVerified": true,
+        "welcomeEmailSent": false,
+        "welcomeEmailStatus": "PENDING",
+        "createdAt": "2026-11-16T08:42:32.963Z",
+        "updatedAt": "2026-11-16T08:42:32.963Z"
+      }
+    ]
+  ],
+  "songs": [
+    [
+      "sync_seed_1",
+      {
+        "id": "sync_seed_1",
+        "title": "Morning Focus & Clarity",
+        "artist": "SyncWave Ambience",
+        "album": "Daily Routines Vol. 1",
+        "durationMs": 240000,
+        "artworkUrl": "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=60",
+        "source": "SPOTIFY",
+        "externalUrl": "https://open.spotify.com",
+        "createdAt": "2026-11-16T08:42:30.367Z"
+      }
+    ],
+    [
+      "sync_seed_2",
+      {
+        "id": "sync_seed_2",
+        "title": "High Tempo Workout Beat",
+        "artist": "Cardio Flow",
+        "album": "Power Routines",
+        "durationMs": 215000,
+        "artworkUrl": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&auto=format&fit=crop&q=60",
+        "source": "YOUTUBE",
+        "externalUrl": "https://music.youtube.com",
+        "createdAt": "2026-11-16T08:42:30.369Z"
+      }
+    ],
+    [
+      "sync_seed_3",
+      {
+        "id": "sync_seed_3",
+        "title": "Midnight Deep Sleep Waves",
+        "artist": "Nocturne Acoustics",
+        "album": "Dreamstate",
+        "durationMs": 360000,
+        "artworkUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=60",
+        "source": "LOCAL",
+        "createdAt": "2026-11-16T08:42:30.369Z"
+      }
+    ]
+  ],
+  "playlists": [
+    [
+      "046ccc75-873e-40df-b832-02a10ca9587b",
+      {
+        "id": "046ccc75-873e-40df-b832-02a10ca9587b",
+        "userId": "21600558-4506-4671-b242-ca4559147662",
+        "name": "User Private Playlist",
+        "isFavorite": false,
+        "songIds": [],
+        "createdAt": "2026-11-16T08:42:32.968Z",
+        "updatedAt": "2026-11-16T08:42:32.968Z"
+      }
+    ]
+  ],
+  "schedules": [
+    [
+      "3d3b1b3a-c0f4-4aad-a961-8f8e2398aa0f",
+      {
+        "name": "Morning Wakeup Routine",
+        "startTime": "07:30",
+        "repeatType": "DAILY",
+        "daysOfWeek": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "targetType": "PLAYLIST",
+        "targetId": "pl_test",
+        "targetName": "User Private Playlist",
+        "priority": "HIGH",
+        "isEnabled": true,
+        "transitionType": "CROSSFADE",
+        "transitionSec": 3,
+        "volume": 0.8,
+        "missedPolicy": "SKIP",
+        "id": "3d3b1b3a-c0f4-4aad-a961-8f8e2398aa0f",
+        "userId": "21600558-4506-4671-b242-ca4559147662",
+        "createdAt": "2026-11-16T08:42:32.976Z",
+        "updatedAt": "2026-11-16T08:42:32.976Z"
+      }
+    ]
+  ],
+  "scheduleHistory": [],
+  "favorites": [
+    [
+      "21600558-4506-4671-b242-ca4559147662",
+      [
+        "sync_seed_1"
+      ]
+    ]
+  ],
+  "playHistory": [
+    {
+      "userId": "21600558-4506-4671-b242-ca4559147662",
+      "songId": "sync_seed_1",
+      "songTitle": "Morning Focus & Clarity",
+      "artistName": "SyncWave Ambience",
+      "playedAt": "2026-11-16T08:42:32.981Z",
+      "durationListenedMs": 60000,
+      "completed": true,
+      "clientPlatform": "WEB",
+      "id": 4
+    }
+  ],
+  "settings": [
+    [
+      "21600558-4506-4671-b242-ca4559147662",
+      {
+        "userId": "21600558-4506-4671-b242-ca4559147662",
+        "isDarkMode": true,
+        "crossfadeEnabled": true,
+        "crossfadeDurationSec": 3,
+        "playbackSpeed": 1,
+        "updatedAt": "2026-11-16T08:42:32.963Z"
+      }
+    ]
+  ],
+  "userPreferences": [
+    [
+      "21600558-4506-4671-b242-ca4559147662",
+      {
+        "userId": "21600558-4506-4671-b242-ca4559147662",
+        "preferredLanguages": [
+          "Tamil",
+          "Hindi"
+        ],
+        "favouriteArtists": [
+          "A. R. Rahman"
+        ],
+        "favouriteGenres": [],
+        "favouriteComposers": [],
+        "favouriteSingers": [],
+        "favouriteMovies": [],
+        "preferredMoods": [],
+        "hasCompletedOnboarding": true,
+        "personalizationEnabled": true,
+        "historyEnabled": true,
+        "updatedAt": "2026-11-16T08:42:32.985Z"
+      }
+    ]
+  ],
+  "listeningEvents": [],
+  "feedbacks": [],
+  "dailyMixes": [],
+  "userSongStats": []
+}

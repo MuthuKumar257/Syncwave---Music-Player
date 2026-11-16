@@ -73,15 +73,18 @@ export const SignUpView: React.FC = () => {
     }
 
     setSubmitting(true);
-    const res = await registerAccount(email.trim(), password, displayName.trim(), verifyWithOtp);
+    let res = await registerAccount(email.trim(), password, displayName.trim(), verifyWithOtp);
+
+    // If OTP sending failed due to host/cloud SMTP block, seamlessly fallback to direct account creation
+    if (!res.ok && (res.code === 'OTP_SEND_FAILED' || res.code === 'OTP_DELIVERY_NOT_CONFIGURED') && verifyWithOtp) {
+      setVerifyWithOtp(false);
+      res = await registerAccount(email.trim(), password, displayName.trim(), false);
+    }
     setSubmitting(false);
 
     if (!res.ok) {
       setError(res.error || 'Could not create your account.');
       setErrorCode(res.code || null);
-      if (res.code === 'OTP_SEND_FAILED' || res.code === 'OTP_DELIVERY_NOT_CONFIGURED') {
-        setVerifyWithOtp(false);
-      }
       return;
     }
 

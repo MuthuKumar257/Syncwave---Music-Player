@@ -73,14 +73,27 @@ function resolveAllowedFrontendOrigin(requestedOrigin?: string): string {
 
 function resolveBackendCallbackUri(req: Request): string {
   const explicit = process.env.GOOGLE_CALLBACK_URL?.trim();
-  if (explicit) return explicit;
+  const host = (req.get('x-forwarded-host') || req.get('host') || '').trim();
+  const isCloudHost = host && !host.includes('localhost') && !host.includes('127.0.0.1');
+
+  // If server is deployed on cloud (e.g. onrender.com) and GOOGLE_CALLBACK_URL was accidentally left as localhost, prefer cloud URL
+  if (explicit && (!isCloudHost || !explicit.includes('localhost'))) {
+    return explicit;
+  }
 
   const configuredBackend = process.env.BACKEND_URL?.trim().replace(/\/+$/, '');
   if (configuredBackend) {
     return `${configuredBackend}/api/auth/google/callback`;
   }
 
-  const rawHost = req.get('host') || 'localhost:3001';
+  if (isCloudHost) {
+    const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+    return `${proto}://${host}/api/auth/google/callback`;
+  }
+
+  if (explicit) return explicit;
+
+  const rawHost = host || 'localhost:3001';
   // Normalize 127.0.0.1 to localhost for OAuth compatibility since Google Cloud Console credentials
   // typically authorize 'http://localhost:3001/api/auth/google/callback'
   const normalizedHost = rawHost.replace(/^127\.0\.0\.1/, 'localhost');

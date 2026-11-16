@@ -14,7 +14,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3001',
+        target: 'https://syncwave-music-player.onrender.com',
         changeOrigin: true,
         secure: false,
         timeout: 30000,
