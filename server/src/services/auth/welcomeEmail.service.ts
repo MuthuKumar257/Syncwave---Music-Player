@@ -67,7 +67,8 @@ export class WelcomeEmailService {
    */
   static buildWelcomeEmail(
     displayName: string,
-    frontendUrl: string
+    frontendUrl: string,
+    authProvider: 'GOOGLE' | 'EMAIL' = 'EMAIL'
   ): {
     subject: string;
     html: string;
@@ -76,6 +77,16 @@ export class WelcomeEmailService {
     const safeName = escapeHtml(displayName.trim()) || 'Music Lover';
     const ctaUrl = frontendUrl.replace(/\/+$/, '');
     const subject = 'Welcome to SyncWave – Your Music Journey Starts Here! 🎵';
+
+    const providerNote =
+      authProvider === 'GOOGLE'
+        ? 'You received this email because you signed up for SyncWave via Google OAuth.'
+        : 'You received this email because you created an account on SyncWave.';
+
+    const leadHtml =
+      authProvider === 'GOOGLE'
+        ? `Welcome to <strong>SyncWave</strong> – your personal music companion! Your Google account has been successfully linked, and your smart audio journey starts right now.`
+        : `Welcome to <strong>SyncWave</strong> – your personal music companion! Your account has been successfully created, and your smart audio journey starts right now.`;
 
     const text = [
       `Hi ${displayName.trim() || 'Music Lover'},`,
@@ -95,7 +106,7 @@ export class WelcomeEmailService {
       'The SyncWave Team',
       '',
       'Support: support@syncwave.app | https://syncwave.app',
-      'You received this email because you signed up for SyncWave via Google OAuth.'
+      providerNote
     ].join('\n');
 
     const html = `
@@ -256,7 +267,7 @@ export class WelcomeEmailService {
       <div class="content">
         <h2 class="greeting">Hi ${safeName},</h2>
         <p class="lead">
-          Welcome to <strong>SyncWave</strong> – your personal music companion! Your Google account has been successfully linked, and your smart audio journey starts right now.
+          ${leadHtml}
         </p>
 
         <!-- Feature Spotlight Cards -->
@@ -300,7 +311,7 @@ export class WelcomeEmailService {
           <a href="mailto:support@syncwave.app" class="footer-link">support@syncwave.app</a>
         </p>
         <p class="footer-text" style="color:#52525B;">
-          You received this email because you signed up for SyncWave using Google OAuth.
+          ${escapeHtml(providerNote)}
         </p>
       </div>
     </div>
@@ -342,7 +353,8 @@ export class WelcomeEmailService {
 
       const { subject, html, text } = this.buildWelcomeEmail(
         user.displayName || 'Music Lover',
-        frontendUrl
+        frontendUrl,
+        user.authProvider || 'EMAIL'
       );
 
       // 2. In test environment, if test hook registered, dispatch directly

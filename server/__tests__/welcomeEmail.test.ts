@@ -293,4 +293,56 @@ describe('Automatic Welcome Email After Google OAuth Login Suite', () => {
     expect(email.html).toContain('&amp;');
     expect(email.html).toContain('&quot;Admin&quot;');
   });
+
+  it('8. New email/password registration triggers personalized welcome email', async () => {
+    const email = `new_email_user_${Date.now()}@example.com`;
+    const res = await request(app).post('/api/auth/register').send({
+      email,
+      password: 'StrongPassword#2026',
+      displayName: 'Kavitha Ram'
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedWelcomeEmails.length).toBe(1);
+    const sent = capturedWelcomeEmails[0];
+    expect(sent.to).toBe(email);
+    expect(sent.subject).toBe('Welcome to SyncWave – Your Music Journey Starts Here! 🎵');
+    expect(sent.text).toContain('Hi Kavitha Ram,');
+    expect(sent.html).toContain('Hi Kavitha Ram,');
+    expect(sent.html).toContain('Your account has been successfully created');
+    expect(sent.text).toContain('You received this email because you created an account on SyncWave.');
+
+    const userInDb = syncStore.findUserByEmail(email);
+    expect(userInDb?.welcomeEmailSent).toBe(true);
+    expect(userInDb?.welcomeEmailStatus).toBe('SENT');
+  });
+
+  it('9. Existing email user logging in does NOT receive duplicate welcome email', async () => {
+    const email = `duplicate_check_${Date.now()}@example.com`;
+    // Register account
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password: 'StrongPassword#2026',
+      displayName: 'Deepak V'
+    });
+    expect(regRes.status).toBe(201);
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(capturedWelcomeEmails.length).toBe(1);
+
+    // Login with direct password
+    const loginRes = await request(app).post('/api/auth/login').send({
+      email,
+      password: 'StrongPassword#2026'
+    });
+    expect(loginRes.status).toBe(200);
+
+    await new Promise((r) => setTimeout(r, 50));
+    // Still strictly 1 email
+    expect(capturedWelcomeEmails.length).toBe(1);
+  });
 });

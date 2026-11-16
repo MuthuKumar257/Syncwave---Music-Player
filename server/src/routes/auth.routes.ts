@@ -194,6 +194,13 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   }
 
   const token = issueAuthToken(user);
+
+  // Asynchronously dispatch personalized welcome email upon account creation
+  void WelcomeEmailService.sendWelcomeEmailOnFirstLogin(
+    user,
+    resolveAllowedFrontendOrigin(req.headers.origin as string)
+  );
+
   res.status(201).json({
     success: true,
     token,
@@ -297,6 +304,14 @@ const handleVerifyOtp = (req: Request, res: Response): void => {
 
   syncStore.markEmailVerified(user.id);
   const token = issueAuthToken(user);
+
+  // If this user has not received their welcome email yet (e.g. newly verified signup), dispatch it
+  if (!user.welcomeEmailSent) {
+    void WelcomeEmailService.sendWelcomeEmailOnFirstLogin(
+      user,
+      resolveAllowedFrontendOrigin(req.headers.origin as string)
+    );
+  }
 
   res.json({
     success: true,
