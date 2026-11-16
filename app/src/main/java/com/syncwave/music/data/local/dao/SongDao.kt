@@ -13,6 +13,9 @@ interface SongDao {
     @Query("SELECT * FROM songs ORDER BY title ASC")
     fun getAllSongs(): Flow<List<SongEntity>>
 
+    @Query("SELECT * FROM songs")
+    suspend fun getAllSongsSnapshot(): List<SongEntity>
+
     @Query("SELECT * FROM songs ORDER BY dateAdded DESC")
     fun getRecentlyAddedSongs(): Flow<List<SongEntity>>
 
@@ -54,4 +57,8 @@ interface SongDao {
 
     @Query("DELETE FROM songs WHERE id NOT IN (:validIds)")
     suspend fun deleteMissingSongs(validIds: List<String>)
+
+    @Query("DELETE FROM songs")
+    suspend fun deleteAllSongs()
 }
+

@@ -1,6 +1,8 @@
 package com.syncwave.music.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,9 +26,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.syncwave.music.domain.model.AudioSource
 import com.syncwave.music.domain.model.Song
-import com.syncwave.music.ui.theme.AccentPink
+import com.syncwave.music.ui.theme.AccentAmber
 import com.syncwave.music.ui.theme.PrimaryPurple
+import com.syncwave.music.ui.theme.SuccessGreen
+import com.syncwave.music.ui.theme.SurfaceRaisedDark
 import com.syncwave.music.ui.theme.TextPrimaryDark
 import com.syncwave.music.ui.theme.TextSecondaryDark
 import com.syncwave.music.ui.theme.TextTertiaryDark
@@ -43,43 +48,85 @@ fun SongListItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         ArtworkImage(
             artworkUri = song.artworkUri,
-            size = 50.dp,
-            cornerRadius = 10.dp
+            size = 42.dp,
+            cornerRadius = 8.dp
         )
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
-                color = if (isPlaying) PrimaryPurple else TextPrimaryDark,
-                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium,
-                fontSize = 15.sp,
+                color = if (isPlaying) AccentAmber else TextPrimaryDark,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = "${song.artist} • ${formatDuration(song.durationMs)}",
-                color = TextSecondaryDark,
-                fontSize = 12.sp,
+                color = TextTertiaryDark,
+                fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Row(
+                modifier = Modifier.padding(top = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isSafFolder = song.source != AudioSource.DOWNLOADED &&
+                    !song.folderName.isNullOrBlank() &&
+                    song.folderName != "Device Library"
+                val sourceLabel = when {
+                    song.source == AudioSource.DOWNLOADED -> "Downloaded · Songs"
+                    isSafFolder -> song.folderName!!
+                    song.source == AudioSource.ONLINE_STREAM -> "Online Stream"
+                    else -> "Device Library"
+                }
+                val sourceColor = when {
+                    song.source == AudioSource.DOWNLOADED -> SuccessGreen
+                    isSafFolder -> PrimaryPurple
+                    else -> TextSecondaryDark
+                }
+                Text(
+                    text = sourceLabel,
+                    color = sourceColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .background(SurfaceRaisedDark, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+                if (song.fileFormat.isNotBlank()) {
+                    Text(
+                        text = song.fileFormat.uppercase(),
+                        color = TextTertiaryDark,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .background(SurfaceRaisedDark, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+            }
         }
 
-        IconButton(onClick = onFavoriteToggle) {
+        IconButton(onClick = onFavoriteToggle, modifier = Modifier.size(32.dp)) {
             Icon(
                 imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                 contentDescription = "Favorite",
-                tint = if (song.isFavorite) AccentPink else TextTertiaryDark,
-                modifier = Modifier.size(20.dp)
+                tint = if (song.isFavorite) AccentAmber else TextTertiaryDark,
+                modifier = Modifier.size(18.dp)
             )
         }
 
@@ -102,3 +149,4 @@ fun formatDuration(durationMs: Long): String {
     val seconds = totalSeconds % 60
     return String.format("%d:%02d", minutes, seconds)
 }
+

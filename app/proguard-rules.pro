@@ -1,1 +1,2 @@
 # SyncWave Proguard Rules
+

@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,6 +41,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.syncwave.music.domain.model.RepeatMode
 import com.syncwave.music.ui.components.ArtworkImage
 import com.syncwave.music.ui.components.formatDuration
+import com.syncwave.music.ui.theme.AccentAmber
 import com.syncwave.music.ui.theme.AccentPink
 import com.syncwave.music.ui.theme.BackgroundDark
 import com.syncwave.music.ui.theme.CardBackgroundDark
@@ -82,6 +87,7 @@ fun NowPlayingScreen(
     val song = playbackState.currentSong
 
     var showQueueSheet by remember { mutableStateOf(false) }
+    var showClearQueueDialog by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var isUserSeeking by remember { mutableStateOf(false) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
@@ -303,7 +309,132 @@ fun NowPlayingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Compact Up Next / Next Song Section
+            val nextSong = playbackState.nextSong
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = when {
+                            playbackState.repeatMode == RepeatMode.ONE -> "UP NEXT (REPEATING)"
+                            playbackState.isShuffleEnabled -> "UP NEXT (SHUFFLED)"
+                            else -> "UP NEXT"
+                        },
+                        color = TextTertiaryDark,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showQueueSheet = true }
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QueueMusic,
+                            contentDescription = "Queue",
+                            tint = AccentAmber,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Queue (${playbackState.queue.size})",
+                            color = AccentAmber,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (nextSong != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(CardBackgroundDark)
+                            .clickable { showQueueSheet = true }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ArtworkImage(
+                            artworkUri = nextSong.artworkUri,
+                            size = 38.dp,
+                            cornerRadius = 8.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = nextSong.title,
+                                color = TextPrimaryDark,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = nextSong.artist,
+                                color = TextSecondaryDark,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = formatDuration(nextSong.durationMs),
+                            color = TextTertiaryDark,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { viewModel.skipToNext() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Play next song now",
+                                tint = AccentAmber,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SurfaceDark)
+                            .clickable { showQueueSheet = true }
+                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No upcoming songs • Tap to view queue",
+                            color = TextTertiaryDark,
+                            fontSize = 12.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Bottom Tools: Sleep Timer & Volume
             Row(
@@ -349,68 +480,333 @@ fun NowPlayingScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                        .padding(horizontal = 20.dp, vertical = 4.dp)
                 ) {
-                    Text(
-                        text = "Playing Queue (${playbackState.queue.size} tracks)",
-                        color = TextPrimaryDark,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    // Header Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Playback Queue",
+                                color = TextPrimaryDark,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${playbackState.queue.size} track${if (playbackState.queue.size == 1) "" else "s"}" +
+                                        (if (playbackState.repeatMode == RepeatMode.ONE) " • Repeat One" else "") +
+                                        (if (playbackState.isShuffleEnabled) " • Shuffled" else ""),
+                                color = TextTertiaryDark,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (playbackState.queue.size > 1) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFFEF4444).copy(alpha = 0.15f))
+                                        .clickable { showClearQueueDialog = true }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = "Clear",
+                                        color = Color(0xFFF87171),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            IconButton(
+                                onClick = { showQueueSheet = false },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Queue",
+                                    tint = TextSecondaryDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(400.dp)
+                            .height(440.dp)
                     ) {
-                        itemsIndexed(playbackState.queue) { index, queueSong ->
-                            val isCurrentTrack = index == playbackState.queueIndex
+                        // Section: Now Playing
+                        item {
+                            Text(
+                                text = "● NOW PLAYING",
+                                color = PrimaryPurple,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isCurrentTrack) PrimaryPurple.copy(alpha = 0.15f) else Color.Transparent)
-                                    .clickable {
-                                        viewModel.playQueueIndex(index)
-                                        showQueueSheet = false
-                                    }
-                                    .padding(vertical = 10.dp, horizontal = 8.dp),
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(PrimaryPurple.copy(alpha = 0.12f))
+                                    .padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "${index + 1}",
-                                    color = if (isCurrentTrack) PrimaryPurple else TextTertiaryDark,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.width(28.dp)
+                                ArtworkImage(
+                                    artworkUri = song.artworkUri,
+                                    size = 38.dp,
+                                    cornerRadius = 6.dp
                                 )
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = queueSong.title,
-                                        color = if (isCurrentTrack) PrimaryPurple else TextPrimaryDark,
-                                        fontWeight = if (isCurrentTrack) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 14.sp,
+                                        text = song.title,
+                                        color = TextPrimaryDark,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = queueSong.artist,
+                                        text = song.artist,
                                         color = TextSecondaryDark,
-                                        fontSize = 12.sp,
-                                        maxLines = 1
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                                 Text(
-                                    text = formatDuration(queueSong.durationMs),
+                                    text = formatDuration(song.durationMs),
                                     color = TextTertiaryDark,
-                                    fontSize = 12.sp
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
                                 )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+
+                        // Section: Upcoming Tracks Header
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "UPCOMING TRACKS",
+                                    color = TextTertiaryDark,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = "Tap to play • ▲ ▼ to reorder",
+                                    color = TextTertiaryDark,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+
+                        if (playbackState.queue.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(CardBackgroundDark)
+                                        .padding(24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No upcoming songs in the queue",
+                                        color = TextTertiaryDark,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        } else {
+                            itemsIndexed(playbackState.queue) { index, queueSong ->
+                                val isCurrentTrack = index == playbackState.queueIndex
+                                val isNextTrack = playbackState.nextSong?.id == queueSong.id && !isCurrentTrack
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            when {
+                                                isCurrentTrack -> PrimaryPurple.copy(alpha = 0.12f)
+                                                isNextTrack -> CardBackgroundDark
+                                                else -> CardBackgroundDark.copy(alpha = 0.6f)
+                                            }
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Move Up / Move Down buttons
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "▲",
+                                            color = if (index > 0) TextSecondaryDark else TextTertiaryDark.copy(alpha = 0.25f),
+                                            fontSize = 10.sp,
+                                            modifier = Modifier
+                                                .clickable(enabled = index > 0) {
+                                                    viewModel.moveQueueItem(index, index - 1)
+                                                }
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                        Text(
+                                            text = "▼",
+                                            color = if (index < playbackState.queue.lastIndex) TextSecondaryDark else TextTertiaryDark.copy(alpha = 0.25f),
+                                            fontSize = 10.sp,
+                                            modifier = Modifier
+                                                .clickable(enabled = index < playbackState.queue.lastIndex) {
+                                                    viewModel.moveQueueItem(index, index + 1)
+                                                }
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+
+                                    // Click song to play immediately
+                                    Row(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                viewModel.playQueueIndex(index)
+                                                showQueueSheet = false
+                                            },
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        ArtworkImage(
+                                            artworkUri = queueSong.artworkUri,
+                                            size = 34.dp,
+                                            cornerRadius = 6.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = queueSong.title,
+                                                    color = if (isCurrentTrack) PrimaryPurple else TextPrimaryDark,
+                                                    fontWeight = if (isCurrentTrack) FontWeight.Bold else FontWeight.Medium,
+                                                    fontSize = 13.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false)
+                                                )
+                                                if (isNextTrack) {
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(3.dp))
+                                                            .background(AccentAmber.copy(alpha = 0.2f))
+                                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "UP NEXT",
+                                                            color = AccentAmber,
+                                                            fontSize = 8.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = queueSong.artist,
+                                                color = TextSecondaryDark,
+                                                fontSize = 11.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Text(
+                                        text = formatDuration(queueSong.durationMs),
+                                        color = TextTertiaryDark,
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+
+                                    IconButton(
+                                        onClick = { viewModel.removeQueueItem(index) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Remove from Queue",
+                                            tint = TextTertiaryDark,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+
+        // Clear Queue Confirmation Dialog
+        if (showClearQueueDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearQueueDialog = false },
+                title = {
+                    Text(
+                        text = "Clear Queue",
+                        color = TextPrimaryDark,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to clear upcoming songs from your queue?",
+                        color = TextSecondaryDark
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.clearQueue()
+                        showClearQueueDialog = false
+                    }) {
+                        Text(
+                            text = "Clear",
+                            color = Color(0xFFF87171),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearQueueDialog = false }) {
+                        Text(
+                            text = "Cancel",
+                            color = TextSecondaryDark
+                        )
+                    }
+                },
+                containerColor = SurfaceDark
+            )
         }
     }
 }

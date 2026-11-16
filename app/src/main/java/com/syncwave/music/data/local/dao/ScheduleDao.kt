@@ -51,3 +51,4 @@ interface ScheduleDao {
     @Query("DELETE FROM schedule_history WHERE id NOT IN (SELECT id FROM schedule_history ORDER BY executedAt DESC LIMIT 200)")
     suspend fun pruneOldHistory()
 }
+

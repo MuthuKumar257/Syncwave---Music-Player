@@ -77,3 +77,4 @@ data class DownloadTaskEntity(
     val errorMessage: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
+

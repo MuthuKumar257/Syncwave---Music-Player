@@ -20,8 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,11 +40,14 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,6 +64,7 @@ import com.syncwave.music.domain.model.RepeatType
 import com.syncwave.music.domain.model.SchedulePriority
 import com.syncwave.music.domain.model.ScheduleTargetType
 import com.syncwave.music.domain.model.TransitionType
+import com.syncwave.music.ui.components.PreciseTimeSelector
 import com.syncwave.music.ui.theme.AccentCyan
 import com.syncwave.music.ui.theme.BackgroundDark
 import com.syncwave.music.ui.theme.CardBackgroundDark
@@ -94,23 +100,10 @@ fun ScheduleCreateEditScreen(
         }
     }
 
-    val timePickerState = rememberTimePickerState(
-        initialHour = formState.timeHour,
-        initialMinute = formState.timeMinute,
-        is24Hour = false
-    )
-
-    // Sync time picker changes back to form state
-    LaunchedEffect(timePickerState.hour, timePickerState.minute) {
-        viewModel.updateForm {
-            it.copy(
-                timeHour = timePickerState.hour,
-                timeMinute = timePickerState.minute
-            )
-        }
-    }
-
+    var timePickerMode by remember { mutableStateOf("DROPDOWN") } // DROPDOWN | KEYBOARD | DIAL
     var targetDropdownExpanded by remember { mutableStateOf(false) }
+    var showNewPlaylistDialog by remember { mutableStateOf(false) }
+    var newPlaylistTitle by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -189,23 +182,76 @@ fun ScheduleCreateEditScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Time Picker
-            Text(
-                text = "Scheduled Start Time",
-                color = TextSecondaryDark,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(SurfaceDark)
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
+            // Time Picker (1-minute precision across all 60 minutes)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                TimePicker(state = timePickerState)
+                Text(
+                    text = "Scheduled Start Time",
+                    color = TextSecondaryDark,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("DROPDOWN" to "Dropdown", "KEYBOARD" to "Keyboard", "DIAL" to "Clock Dial").forEach { (modeKey, modeLabel) ->
+                        FilterChip(
+                            selected = timePickerMode == modeKey,
+                            onClick = { timePickerMode = modeKey },
+                            label = { Text(modeLabel, fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PrimaryPurple.copy(alpha = 0.25f),
+                                selectedLabelColor = PrimaryPurple,
+                                containerColor = SurfaceDark,
+                                labelColor = TextSecondaryDark
+                            )
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            when (timePickerMode) {
+                "DROPDOWN" -> {
+                    PreciseTimeSelector(
+                        hour24 = formState.timeHour,
+                        minute = formState.timeMinute,
+                        onTimeChanged = { newH, newM ->
+                            viewModel.updateForm { it.copy(timeHour = newH, timeMinute = newM) }
+                        }
+                    )
+                }
+                else -> {
+                    key(formState.formVersion, timePickerMode) {
+                        val timePickerState = rememberTimePickerState(
+                            initialHour = formState.timeHour,
+                            initialMinute = formState.timeMinute,
+                            is24Hour = false
+                        )
+                        LaunchedEffect(timePickerState.hour, timePickerState.minute) {
+                            viewModel.updateForm {
+                                it.copy(
+                                    timeHour = timePickerState.hour,
+                                    timeMinute = timePickerState.minute
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(SurfaceDark)
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (timePickerMode == "KEYBOARD") {
+                                TimeInput(state = timePickerState)
+                            } else {
+                                TimePicker(state = timePickerState)
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -219,48 +265,75 @@ fun ScheduleCreateEditScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FilterChip(
-                    selected = formState.targetType == ScheduleTargetType.PLAYLIST,
-                    onClick = {
-                        val firstPl = formState.availablePlaylists.firstOrNull()
-                        viewModel.updateForm {
-                            it.copy(
-                                targetType = ScheduleTargetType.PLAYLIST,
-                                targetId = firstPl?.id ?: "",
-                                targetName = firstPl?.name ?: "No Playlist"
-                            )
-                        }
-                    },
-                    label = { Text("Playlist") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PrimaryPurple,
-                        selectedLabelColor = TextPrimaryDark,
-                        containerColor = SurfaceDark,
-                        labelColor = TextSecondaryDark
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilterChip(
+                        selected = formState.targetType == ScheduleTargetType.PLAYLIST,
+                        onClick = {
+                            val firstPl = formState.availablePlaylists.firstOrNull()
+                            viewModel.updateForm {
+                                it.copy(
+                                    targetType = ScheduleTargetType.PLAYLIST,
+                                    targetId = firstPl?.id ?: "",
+                                    targetName = firstPl?.name ?: "No Playlist"
+                                )
+                            }
+                        },
+                        label = { Text("Playlist") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryPurple,
+                            selectedLabelColor = TextPrimaryDark,
+                            containerColor = SurfaceDark,
+                            labelColor = TextSecondaryDark
+                        )
                     )
-                )
 
-                FilterChip(
-                    selected = formState.targetType == ScheduleTargetType.SONG,
-                    onClick = {
-                        val firstSong = formState.availableSongs.firstOrNull()
-                        viewModel.updateForm {
-                            it.copy(
-                                targetType = ScheduleTargetType.SONG,
-                                targetId = firstSong?.id ?: "",
-                                targetName = firstSong?.title ?: "No Song"
-                            )
-                        }
-                    },
-                    label = { Text("Individual Track") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PrimaryPurple,
-                        selectedLabelColor = TextPrimaryDark,
-                        containerColor = SurfaceDark,
-                        labelColor = TextSecondaryDark
+                    FilterChip(
+                        selected = formState.targetType == ScheduleTargetType.SONG,
+                        onClick = {
+                            val firstSong = formState.availableSongs.firstOrNull()
+                            viewModel.updateForm {
+                                it.copy(
+                                    targetType = ScheduleTargetType.SONG,
+                                    targetId = firstSong?.id ?: "",
+                                    targetName = firstSong?.title ?: "No Song"
+                                )
+                            }
+                        },
+                        label = { Text("Individual Track") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryPurple,
+                            selectedLabelColor = TextPrimaryDark,
+                            containerColor = SurfaceDark,
+                            labelColor = TextSecondaryDark
+                        )
                     )
-                )
+                }
+
+                if (formState.targetType == ScheduleTargetType.PLAYLIST) {
+                    TextButton(onClick = {
+                        newPlaylistTitle = ""
+                        showNewPlaylistDialog = true
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Add Playlist",
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -295,6 +368,25 @@ fun ScheduleCreateEditScreen(
                     modifier = Modifier.background(SurfaceDark)
                 ) {
                     if (formState.targetType == ScheduleTargetType.PLAYLIST) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("+ Create New Playlist", color = AccentCyan, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            onClick = {
+                                targetDropdownExpanded = false
+                                newPlaylistTitle = ""
+                                showNewPlaylistDialog = true
+                            }
+                        )
                         formState.availablePlaylists.forEach { pl ->
                             DropdownMenuItem(
                                 text = { Text(pl.name, color = TextPrimaryDark) },
@@ -508,5 +600,70 @@ fun ScheduleCreateEditScreen(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+
+        if (showNewPlaylistDialog) {
+            AlertDialog(
+                onDismissRequest = { showNewPlaylistDialog = false },
+                title = {
+                    Text(
+                        text = "Create New Playlist",
+                        color = TextPrimaryDark,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            text = "Enter a title for your new playlist. It will be immediately selected for this routine.",
+                            color = TextSecondaryDark,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        OutlinedTextField(
+                            value = newPlaylistTitle,
+                            onValueChange = { newPlaylistTitle = it },
+                            placeholder = { Text("e.g. Chill Beats, Morning Motivation", color = TextTertiaryDark) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = SurfaceDark,
+                                unfocusedContainerColor = SurfaceDark,
+                                focusedBorderColor = PrimaryPurple,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedTextColor = TextPrimaryDark,
+                                unfocusedTextColor = TextPrimaryDark
+                            )
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (newPlaylistTitle.isNotBlank()) {
+                                viewModel.createAndSelectPlaylist(newPlaylistTitle)
+                                showNewPlaylistDialog = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PrimaryPurple,
+                            contentColor = TextPrimaryDark
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Create & Select")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNewPlaylistDialog = false }) {
+                        Text("Cancel", color = TextSecondaryDark)
+                    }
+                },
+                containerColor = CardBackgroundDark,
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
     }
 }
+

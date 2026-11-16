@@ -32,6 +32,49 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Deep Link: Custom URI Scheme (syncwave://) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="syncwave" />
+            </intent-filter>
+
+            <!-- Android App Links: Verified HTTPS Domain (syncwave.app) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="syncwave.app"
+                    android:pathPrefix="/song/" />
+                <data
+                    android:scheme="https"
+                    android:host="syncwave.app"
+                    android:pathPrefix="/artist/" />
+                <data
+                    android:scheme="https"
+                    android:host="syncwave.app"
+                    android:pathPrefix="/playlist/" />
+                <data
+                    android:scheme="https"
+                    android:host="www.syncwave.app"
+                    android:pathPrefix="/song/" />
+                <data
+                    android:scheme="https"
+                    android:host="www.syncwave.app"
+                    android:pathPrefix="/artist/" />
+                <data
+                    android:scheme="https"
+                    android:host="www.syncwave.app"
+                    android:pathPrefix="/playlist/" />
+                <data
+                    android:scheme="http"
+                    android:host="syncwave.app"
+                    android:pathPrefix="/song/" />
+            </intent-filter>
         </activity>
 
         <service
@@ -69,3 +112,4 @@
     </application>
 
 </manifest>
+

@@ -26,7 +26,7 @@ import com.syncwave.music.data.local.entity.SongEntity
         PlayHistoryEntity::class,
         DownloadTaskEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SyncWaveDatabase : RoomDatabase() {
@@ -39,3 +39,4 @@ abstract class SyncWaveDatabase : RoomDatabase() {
         const val DATABASE_NAME = "syncwave_database.db"
     }
 }
+

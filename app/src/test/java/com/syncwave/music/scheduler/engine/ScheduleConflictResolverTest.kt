@@ -92,3 +92,4 @@ class ScheduleConflictResolverTest {
         assertEquals(ConflictResolutionAction.EXECUTE_IMMEDIATELY, result)
     }
 }
+

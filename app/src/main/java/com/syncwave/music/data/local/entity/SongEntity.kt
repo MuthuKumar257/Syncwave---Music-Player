@@ -28,7 +28,9 @@ data class SongEntity(
     val genre: String?,
     val dateAdded: Long,
     val isFavorite: Boolean = false,
-    val source: String = AudioSource.LOCAL.name
+    val source: String = AudioSource.LOCAL.name,
+    val fileFormat: String = "",
+    val folderName: String? = null
 ) {
     fun toDomain(): Song = Song(
         id = id,
@@ -43,7 +45,9 @@ data class SongEntity(
         genre = genre,
         dateAdded = dateAdded,
         isFavorite = isFavorite,
-        source = try { AudioSource.valueOf(source) } catch (_: Exception) { AudioSource.LOCAL }
+        source = try { AudioSource.valueOf(source) } catch (_: Exception) { AudioSource.LOCAL },
+        fileFormat = fileFormat,
+        folderName = folderName
     )
 
     companion object {
@@ -60,7 +64,10 @@ data class SongEntity(
             genre = song.genre,
             dateAdded = song.dateAdded,
             isFavorite = song.isFavorite,
-            source = song.source.name
+            source = song.source.name,
+            fileFormat = song.fileFormat,
+            folderName = song.folderName
         )
     }
 }
+

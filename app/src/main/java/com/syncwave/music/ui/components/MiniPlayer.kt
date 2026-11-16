@@ -1,6 +1,7 @@
 package com.syncwave.music.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,6 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,10 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.syncwave.music.domain.model.PlaybackState
 import com.syncwave.music.ui.theme.CardBackgroundDark
-import com.syncwave.music.ui.theme.PrimaryPurple
+import com.syncwave.music.ui.theme.HairlineDark
+import com.syncwave.music.ui.theme.PrimaryStudio
 import com.syncwave.music.ui.theme.SurfaceDark
 import com.syncwave.music.ui.theme.TextPrimaryDark
 import com.syncwave.music.ui.theme.TextSecondaryDark
+import com.syncwave.music.ui.theme.TextTertiaryDark
 
 @Composable
 fun MiniPlayer(
@@ -51,57 +53,62 @@ fun MiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(SurfaceDark)
+            .border(1.dp, HairlineDark, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ArtworkImage(
                 artworkUri = song.artworkUri,
-                size = 48.dp,
-                cornerRadius = 10.dp
+                size = 40.dp,
+                cornerRadius = 8.dp
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = song.title,
                     color = TextPrimaryDark,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = song.artist,
-                    color = TextSecondaryDark,
-                    fontSize = 12.sp,
+                    text = if (playbackState.isRemoteMode && !playbackState.activeDeviceName.isNullOrBlank()) {
+                        "Remote • ${playbackState.activeDeviceName}"
+                    } else {
+                        song.artist
+                    },
+                    color = if (playbackState.isRemoteMode) com.syncwave.music.ui.theme.AccentAmber else TextTertiaryDark,
+                    fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            IconButton(onClick = onPlayPauseClick) {
+            IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(36.dp)) {
                 Icon(
                     imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
                     tint = TextPrimaryDark,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            IconButton(onClick = onSkipNextClick) {
+            IconButton(onClick = onSkipNextClick, modifier = Modifier.size(32.dp)) {
                 Icon(
                     imageVector = Icons.Default.SkipNext,
                     contentDescription = "Next",
-                    tint = TextSecondaryDark,
-                    modifier = Modifier.size(24.dp)
+                    tint = TextTertiaryDark,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -110,9 +117,9 @@ fun MiniPlayer(
             progress = { playbackState.progress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(3.dp),
-            color = PrimaryPurple,
-            trackColor = CardBackgroundDark
+                .height(2.dp),
+            color = PrimaryStudio,
+            trackColor = HairlineDark
         )
     }
 }

@@ -1,7 +1,6 @@
 package com.syncwave.music.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -12,10 +11,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryPurple,
-    onPrimary = TextPrimaryDark,
-    primaryContainer = PrimaryPurpleVariant,
-    secondary = SecondaryGreen,
+    primary = PrimaryStudio,
+    onPrimary = BackgroundDark,
+    primaryContainer = SurfaceRaisedDark,
+    secondary = AccentAmber,
     onSecondary = BackgroundDark,
     background = BackgroundDark,
     onBackground = TextPrimaryDark,
@@ -24,21 +23,20 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = SurfaceVariantDark,
     onSurfaceVariant = TextSecondaryDark,
     error = ErrorRed,
-    outline = DividerDark
+    outline = HairlineDark
 )
 
-// SyncWave is dark-first, but supports light fallback
 private val LightColorScheme = lightColorScheme(
-    primary = PrimaryPurple,
-    onPrimary = TextPrimaryDark,
-    secondary = SecondaryGreen,
+    primary = PrimaryStudio,
+    onPrimary = BackgroundDark,
+    secondary = AccentAmber,
     background = BackgroundDark,
     surface = SurfaceDark
 )
 
 @Composable
 fun SyncWaveTheme(
-    darkTheme: Boolean = true, // Dark-first by default
+    darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -47,7 +45,7 @@ fun SyncWaveTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = BackgroundDark.toArgb()
-            window.navigationBarColor = BackgroundDark.toArgb()
+            window.navigationBarColor = SurfaceDeepest.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
         }

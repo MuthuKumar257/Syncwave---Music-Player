@@ -1,0 +1,19 @@
+{
+  "short_name": "SyncWave",
+  "name": "SyncWave - Smart Music Player",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#101014",
+  "theme_color": "#101014",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "description": "Cross-Platform Smart Music Player with Automated Scheduling"
+}
+

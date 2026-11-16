@@ -56,3 +56,4 @@ class SyncWaveApp : Application() {
         const val DOWNLOAD_CHANNEL_ID = "syncwave_download_channel"
     }
 }
+

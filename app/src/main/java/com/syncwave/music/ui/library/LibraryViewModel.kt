@@ -1,9 +1,12 @@
 package com.syncwave.music.ui.library
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.syncwave.music.data.repository.PreferencesRepository
 import com.syncwave.music.domain.model.Album
 import com.syncwave.music.domain.model.Artist
+import com.syncwave.music.domain.model.AudioSource
 import com.syncwave.music.domain.model.Playlist
 import com.syncwave.music.domain.model.Song
 import com.syncwave.music.domain.repository.MusicRepository
@@ -27,14 +30,24 @@ enum class LibraryTab(val title: String) {
     FAVORITES("Favorites")
 }
 
+enum class LibrarySourceFilter(val label: String) {
+    ALL("All"),
+    DOWNLOADED("Downloaded"),
+    FOLDERS("Folders"),
+    DEVICE("Device")
+}
+
 data class LibraryUiState(
     val selectedTab: LibraryTab = LibraryTab.SONGS,
+    val sourceFilter: LibrarySourceFilter = LibrarySourceFilter.ALL,
     val searchQuery: String = "",
     val songs: List<Song> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
+    val musicFolderCount: Int = 0,
+    val defaultFolderUri: String? = null,
     val isScanning: Boolean = false,
     val scanMessage: String? = null
 )
@@ -43,16 +56,20 @@ data class LibraryUiState(
 class LibraryViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val playlistRepository: PlaylistRepository,
+    private val preferencesRepository: PreferencesRepository,
     private val playbackManager: PlaybackManager
 ) : ViewModel() {
 
     private val _selectedTab = MutableStateFlow(LibraryTab.SONGS)
+    private val _sourceFilter = MutableStateFlow(LibrarySourceFilter.ALL)
     private val _searchQuery = MutableStateFlow("")
     private val _isScanning = MutableStateFlow(false)
     private val _scanMessage = MutableStateFlow<String?>(null)
 
     val playbackState = playbackManager.playbackState
+    val downloadTasks = musicRepository.downloadTasks
 
+    @Suppress("UNCHECKED_CAST")
     val uiState: StateFlow<LibraryUiState> = combine(
         _selectedTab,
         _searchQuery,
@@ -64,17 +81,38 @@ class LibraryViewModel @Inject constructor(
         musicRepository.getAllArtists(),
         musicRepository.getFavoriteSongs(),
         _isScanning,
-        _scanMessage
+        _scanMessage,
+        _sourceFilter,
+        preferencesRepository.musicFolderUris,
+        preferencesRepository.defaultMusicFolderUri
     ) { args: Array<Any?> ->
-        @Suppress("UNCHECKED_CAST")
+        val filter = args[9] as LibrarySourceFilter
+        val allMatchingSongs = args[2] as List<Song>
+        val filteredSongs = when (filter) {
+            LibrarySourceFilter.ALL -> allMatchingSongs
+            LibrarySourceFilter.DOWNLOADED -> allMatchingSongs.filter { it.source == AudioSource.DOWNLOADED }
+            LibrarySourceFilter.FOLDERS -> allMatchingSongs.filter {
+                it.source != AudioSource.DOWNLOADED &&
+                    !it.folderName.isNullOrBlank() &&
+                    it.folderName != "Device Library"
+            }
+            LibrarySourceFilter.DEVICE -> allMatchingSongs.filter {
+                it.source == AudioSource.LOCAL &&
+                    (it.folderName.isNullOrBlank() || it.folderName == "Device Library")
+            }
+        }
+        val folderUris = args[10] as Set<String>
         LibraryUiState(
             selectedTab = args[0] as LibraryTab,
+            sourceFilter = filter,
             searchQuery = args[1] as String,
-            songs = args[2] as List<Song>,
+            songs = filteredSongs,
             playlists = args[3] as List<Playlist>,
             albums = args[4] as List<Album>,
             artists = args[5] as List<Artist>,
             favoriteSongs = args[6] as List<Song>,
+            musicFolderCount = folderUris.size,
+            defaultFolderUri = args[11] as String?,
             isScanning = args[7] as Boolean,
             scanMessage = args[8] as String?
         )
@@ -86,6 +124,10 @@ class LibraryViewModel @Inject constructor(
 
     fun setTab(tab: LibraryTab) {
         _selectedTab.value = tab
+    }
+
+    fun setSourceFilter(filter: LibrarySourceFilter) {
+        _sourceFilter.value = filter
     }
 
     fun setSearchQuery(query: String) {
@@ -133,7 +175,49 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    fun addMusicFolder(treeUri: Uri, makeDefault: Boolean = false) {
+        viewModelScope.launch {
+            _isScanning.value = true
+            val result = musicRepository.addMusicFolder(treeUri, makeDefault)
+            _isScanning.value = false
+            result.fold(
+                onSuccess = { count ->
+                    _scanMessage.value = "Folder added • $count total songs indexed"
+                },
+                onFailure = { error ->
+                    _scanMessage.value = "Folder scan failed: ${error.message}"
+                }
+            )
+        }
+    }
+
+    fun pauseDownload(trackId: String) {
+        viewModelScope.launch {
+            musicRepository.pauseDownload(trackId)
+        }
+    }
+
+    fun resumeDownload(trackId: String) {
+        viewModelScope.launch {
+            val result = musicRepository.resumeDownload(trackId)
+            result.onSuccess { song ->
+                _scanMessage.value = "Completed full download: ${song.title}"
+            }.onFailure { error ->
+                if (error !is kotlinx.coroutines.CancellationException) {
+                    _scanMessage.value = error.message ?: "Download failed"
+                }
+            }
+        }
+    }
+
+    fun cancelDownload(trackId: String) {
+        viewModelScope.launch {
+            musicRepository.cancelDownload(trackId)
+        }
+    }
+
     fun clearScanMessage() {
         _scanMessage.value = null
     }
 }
+

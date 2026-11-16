@@ -87,29 +87,29 @@ fun SchedulerDashboardScreen(
             ) {
                 Column {
                     Text(
-                        text = "Smart Scheduler",
+                        text = "Scheduler",
                         color = TextPrimaryDark,
                         fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Automated routines & time-based music",
-                        color = TextSecondaryDark,
-                        fontSize = 13.sp
+                        text = "Automated routines and audio transitions",
+                        color = TextTertiaryDark,
+                        fontSize = 12.sp
                     )
                 }
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(CardBackgroundDark)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(AccentAmber.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "${dashboardState.schedules.count { it.isEnabled }} Active",
-                        color = SecondaryGreen,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "${dashboardState.schedules.count { it.isEnabled }} active",
+                        color = AccentAmber,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -118,12 +118,12 @@ fun SchedulerDashboardScreen(
             TabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = BackgroundDark,
-                contentColor = PrimaryPurple,
+                contentColor = TextPrimaryDark,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = PrimaryPurple,
-                        height = 3.dp
+                        color = TextPrimaryDark,
+                        height = 2.dp
                     )
                 },
                 divider = {}
@@ -134,8 +134,9 @@ fun SchedulerDashboardScreen(
                     text = {
                         Text(
                             text = "Routines (${dashboardState.schedules.size})",
-                            color = if (selectedTab == 0) PrimaryPurple else TextSecondaryDark,
-                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
+                            color = if (selectedTab == 0) TextPrimaryDark else TextTertiaryDark,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp
                         )
                     }
                 )
@@ -144,9 +145,10 @@ fun SchedulerDashboardScreen(
                     onClick = { selectedTab = 1 },
                     text = {
                         Text(
-                            text = "History Logs",
-                            color = if (selectedTab == 1) PrimaryPurple else TextSecondaryDark,
-                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
+                            text = "History logs",
+                            color = if (selectedTab == 1) TextPrimaryDark else TextTertiaryDark,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp
                         )
                     }
                 )
@@ -224,11 +226,12 @@ fun SchedulerDashboardScreen(
             }
         }
 
-        // Floating Action Button to create a new routine
+        // Action button to create a new routine
         FloatingActionButton(
             onClick = onNavigateToCreate,
-            containerColor = PrimaryPurple,
-            contentColor = TextPrimaryDark,
+            containerColor = TextPrimaryDark,
+            contentColor = BackgroundDark,
+            shape = RoundedCornerShape(8.dp),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 20.dp, bottom = 90.dp)
@@ -280,3 +283,4 @@ fun ExecutionHistoryCard(record: ScheduleExecutionRecord) {
         )
     }
 }
+

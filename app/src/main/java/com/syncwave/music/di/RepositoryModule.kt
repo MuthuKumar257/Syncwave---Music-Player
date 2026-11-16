@@ -34,3 +34,4 @@ abstract class RepositoryModule {
         scheduleRepositoryImpl: ScheduleRepositoryImpl
     ): ScheduleRepository
 }
+

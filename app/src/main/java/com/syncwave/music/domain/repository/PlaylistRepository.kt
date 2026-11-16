@@ -17,3 +17,4 @@ interface PlaylistRepository {
     suspend fun removeSongFromPlaylist(playlistId: String, songId: String)
     suspend fun setPlaylistFavorite(id: String, isFavorite: Boolean)
 }
+

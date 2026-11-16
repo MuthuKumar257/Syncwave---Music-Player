@@ -45,3 +45,4 @@ object DatabaseModule {
     fun provideHistoryAndFavoritesDao(database: SyncWaveDatabase): HistoryAndFavoritesDao =
         database.historyAndFavoritesDao()
 }
+

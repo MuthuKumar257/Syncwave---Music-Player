@@ -2,8 +2,12 @@ package com.syncwave.music
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +32,8 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var musicRepository: MusicRepository
 
+    private var mediaStoreObserver: ContentObserver? = null
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -43,6 +49,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         checkAndRequestPermissions()
+        registerAudioContentObserver()
 
         setContent {
             SyncWaveTheme {
@@ -53,6 +60,41 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        triggerMusicScan()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        playbackManager.persistPlaybackSession(immediate = true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        playbackManager.persistPlaybackSession(immediate = true)
+    }
+
+    override fun onDestroy() {
+        mediaStoreObserver?.let { contentResolver.unregisterContentObserver(it) }
+        super.onDestroy()
+    }
+
+    private fun registerAudioContentObserver() {
+        if (mediaStoreObserver != null) return
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                triggerMusicScan()
+            }
+        }
+        mediaStoreObserver = observer
+        contentResolver.registerContentObserver(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            true,
+            observer
+        )
     }
 
     private fun checkAndRequestPermissions() {
@@ -84,3 +126,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

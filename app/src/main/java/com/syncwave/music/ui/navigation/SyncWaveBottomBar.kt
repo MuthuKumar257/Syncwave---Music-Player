@@ -12,9 +12,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.syncwave.music.ui.theme.PrimaryPurple
-import com.syncwave.music.ui.theme.SurfaceDark
-import com.syncwave.music.ui.theme.SurfaceVariantDark
+import com.syncwave.music.ui.theme.SurfaceDeepest
+import com.syncwave.music.ui.theme.SurfaceRaisedDark
 import com.syncwave.music.ui.theme.TextPrimaryDark
 import com.syncwave.music.ui.theme.TextTertiaryDark
 
@@ -28,7 +27,7 @@ fun SyncWaveBottomBar(
 
     NavigationBar(
         modifier = modifier,
-        containerColor = SurfaceDark,
+        containerColor = SurfaceDeepest,
         contentColor = TextPrimaryDark
     ) {
         Screen.bottomNavDestinations.forEach { screen ->
@@ -57,11 +56,11 @@ fun SyncWaveBottomBar(
                     }
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = PrimaryPurple,
-                    selectedTextColor = PrimaryPurple,
+                    selectedIconColor = TextPrimaryDark,
+                    selectedTextColor = TextPrimaryDark,
                     unselectedIconColor = TextTertiaryDark,
                     unselectedTextColor = TextTertiaryDark,
-                    indicatorColor = SurfaceVariantDark
+                    indicatorColor = SurfaceRaisedDark
                 )
             )
         }

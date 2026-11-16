@@ -1,6 +1,7 @@
 package com.syncwave.music.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,8 +17,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -33,12 +36,12 @@ import androidx.compose.ui.unit.sp
 import com.syncwave.music.domain.model.MusicSchedule
 import com.syncwave.music.domain.model.RepeatType
 import com.syncwave.music.domain.model.SchedulePriority
+import com.syncwave.music.domain.utils.TimeSelectionUtils
 import com.syncwave.music.ui.theme.AccentAmber
-import com.syncwave.music.ui.theme.AccentCyan
-import com.syncwave.music.ui.theme.ErrorRed
-import com.syncwave.music.ui.theme.PrimaryPurple
-import com.syncwave.music.ui.theme.SecondaryGreen
+import com.syncwave.music.ui.theme.BackgroundDark
+import com.syncwave.music.ui.theme.HairlineDark
 import com.syncwave.music.ui.theme.SurfaceDark
+import com.syncwave.music.ui.theme.SurfaceRaisedDark
 import com.syncwave.music.ui.theme.TextPrimaryDark
 import com.syncwave.music.ui.theme.TextSecondaryDark
 import com.syncwave.music.ui.theme.TextTertiaryDark
@@ -53,10 +56,11 @@ fun ScheduleCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(SurfaceDark)
+            .border(1.dp, HairlineDark, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(16.dp)
+            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -66,49 +70,66 @@ fun ScheduleCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (schedule.isEnabled) PrimaryPurple.copy(alpha = 0.2f) else TextTertiaryDark.copy(alpha = 0.1f)),
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SurfaceRaisedDark)
+                        .border(1.dp, HairlineDark, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Alarm,
                         contentDescription = null,
-                        tint = if (schedule.isEnabled) PrimaryPurple else TextTertiaryDark,
-                        modifier = Modifier.size(22.dp)
+                        tint = if (schedule.isEnabled) AccentAmber else TextTertiaryDark,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 Column {
                     Text(
                         text = schedule.name,
-                        color = if (schedule.isEnabled) TextPrimaryDark else TextSecondaryDark,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
+                        color = if (schedule.isEnabled) TextPrimaryDark else TextTertiaryDark,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = formatTimeDisplay(schedule.startTime),
-                        color = if (schedule.isEnabled) SecondaryGreen else TextTertiaryDark,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp
+                        color = if (schedule.isEnabled) TextPrimaryDark else TextTertiaryDark,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 18.sp
                     )
                 }
             }
 
-            Switch(
-                checked = schedule.isEnabled,
-                onCheckedChange = onToggleEnabled,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = TextPrimaryDark,
-                    checkedTrackColor = SecondaryGreen,
-                    uncheckedThumbColor = TextSecondaryDark,
-                    uncheckedTrackColor = SurfaceDark
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onClick,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Routine",
+                        tint = TextTertiaryDark,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                Switch(
+                    checked = schedule.isEnabled,
+                    onCheckedChange = onToggleEnabled,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = BackgroundDark,
+                        checkedTrackColor = TextPrimaryDark,
+                        uncheckedThumbColor = TextTertiaryDark,
+                        uncheckedTrackColor = SurfaceRaisedDark
+                    )
                 )
-            )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -141,23 +162,17 @@ fun ScheduleCard(
                     RepeatType.WEEKDAYS -> "Weekdays"
                     RepeatType.CUSTOM_DAYS -> "Custom"
                 },
-                backgroundColor = AccentCyan.copy(alpha = 0.15f),
-                textColor = AccentCyan
+                backgroundColor = SurfaceRaisedDark,
+                textColor = TextTertiaryDark
             )
 
             Spacer(modifier = Modifier.width(6.dp))
 
             // Priority badge
-            val (badgeBg, badgeText) = when (schedule.priority) {
-                SchedulePriority.LOW -> TextTertiaryDark.copy(alpha = 0.2f) to TextTertiaryDark
-                SchedulePriority.NORMAL -> PrimaryPurple.copy(alpha = 0.2f) to PrimaryPurple
-                SchedulePriority.HIGH -> AccentAmber.copy(alpha = 0.2f) to AccentAmber
-                SchedulePriority.URGENT -> ErrorRed.copy(alpha = 0.2f) to ErrorRed
-            }
             BadgeChip(
-                text = schedule.priority.name,
-                backgroundColor = badgeBg,
-                textColor = badgeText
+                text = schedule.priority.name.lowercase(),
+                backgroundColor = SurfaceRaisedDark,
+                textColor = if (schedule.priority == SchedulePriority.URGENT || schedule.priority == SchedulePriority.HIGH) AccentAmber else TextTertiaryDark
             )
         }
     }
@@ -190,14 +205,9 @@ fun formatTimeDisplay(timeStr: String): String {
         val parts = timeStr.split(":")
         val hour = parts[0].toInt()
         val minute = parts[1].toInt()
-        val amPm = if (hour >= 12) "PM" else "AM"
-        val displayHour = when {
-            hour == 0 -> 12
-            hour > 12 -> hour - 12
-            else -> hour
-        }
-        String.format("%02d:%02d %s", displayHour, minute, amPm)
+        TimeSelectionUtils.formatTo12Hour(hour, minute)
     } catch (_: Exception) {
         timeStr
     }
 }
+

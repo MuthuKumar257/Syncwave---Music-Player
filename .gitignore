@@ -1,5 +1,7 @@
+# Android & Gradle
 *.iml
 .gradle
+.kotlin
 /local.properties
 /.idea
 .DS_Store
@@ -8,3 +10,32 @@
 .externalNativeBuild
 .cxx
 /app/build
+
+# Node.js & Dependencies
+node_modules/
+*/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build Outputs & Bundles
+dist/
+*/dist/
+build/
+*/build/
+.vite/
+*/.vite/
+.output/
+
+# Environment & Local Config
+.env
+.env.local
+.env.*.local
+
+# OS Metadata & Temp Files
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+*.tmp
+*.bak
+*~

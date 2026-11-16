@@ -3,34 +3,48 @@ package com.syncwave.music.ui.theme
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-// SyncWave Premium Color Palette (Dark-first design)
-val BackgroundDark = Color(0xFF101014)
-val SurfaceDark = Color(0xFF1B1B23)
-val SurfaceVariantDark = Color(0xFF252530)
-val CardBackgroundDark = Color(0xFF1E1E28)
+// Unslop Graphite Ramp (Craft & Restraint)
+val BackgroundDark = Color(0xFF141415)
+val SurfaceDeepest = Color(0xFF0F0F10)
+val SurfaceDark = Color(0xFF19191B)
+val SurfaceRaisedDark = Color(0xFF232325)
+val SurfaceVariantDark = Color(0xFF232325)
+val CardBackgroundDark = Color(0xFF19191B)
 
-val PrimaryPurple = Color(0xFF8B5CF6)
-val PrimaryPurpleVariant = Color(0xFF7C3AED)
-val SecondaryGreen = Color(0xFF22C55E)
-val SecondaryGreenVariant = Color(0xFF16A34A)
+// Hairline at 8% opacity
+val HairlineDark = Color(0x14EDEDED)
+val HairlineLight = Color(0x20EDEDED)
 
-val AccentCyan = Color(0xFF06B6D4)
-val AccentPink = Color(0xFFEC4899)
+// World Accent: Studio Hardware Amber / Warm Indicator
 val AccentAmber = Color(0xFFF59E0B)
-val ErrorRed = Color(0xFFEF4444)
+val AccentAmberHover = Color(0xFFD97706)
+val AccentAmberMuted = Color(0x26F59E0B)
 
-val TextPrimaryDark = Color(0xFFFFFFFF)
-val TextSecondaryDark = Color(0xFFA1A1AA)
-val TextTertiaryDark = Color(0xFF71717A)
-val DividerDark = Color(0xFF2E2E3A)
+// Primary Off-White & Semantic Colors
+val PrimaryStudio = Color(0xFFEDEDED)
+val PrimaryPurple = Color(0xFFEDEDED) // Aliased to off-white for craft restraint
+val PrimaryPurpleVariant = Color(0xFF232325)
+val SecondaryGreen = Color(0xFFF59E0B) // Aliased to warm amber
+val SecondaryGreenVariant = Color(0xFFD97706)
 
-// Gradients
+val AccentCyan = Color(0xFFEDEDED)
+val AccentPink = Color(0xFFEDEDED)
+val ErrorRed = Color(0xFFE5484D)
+val SuccessGreen = Color(0xFF4CC38A)
+
+// Text Roles from Graphite Ramp
+val TextPrimaryDark = Color(0xFFEDEDED)
+val TextSecondaryDark = Color(0xFFA1A1A6)
+val TextTertiaryDark = Color(0xFF85858B)
+val DividerDark = HairlineDark
+
+// Single-Neutral Tone Shifts (No Hue Gradients)
 val PrimaryGradient = Brush.horizontalGradient(
-    colors = listOf(PrimaryPurple, AccentPink)
+    colors = listOf(Color(0xFF232325), Color(0xFF19191B))
 )
 val ActiveScheduleGradient = Brush.horizontalGradient(
-    colors = listOf(PrimaryPurple, SecondaryGreen)
+    colors = listOf(Color(0xFF232325), Color(0xFF1F1F21))
 )
 val CardGradient = Brush.verticalGradient(
-    colors = listOf(Color(0xFF242432), Color(0xFF1B1B23))
+    colors = listOf(Color(0xFF232325), Color(0xFF19191B))
 )

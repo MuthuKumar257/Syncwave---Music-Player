@@ -101,6 +101,7 @@ class SyncWaveMediaSessionService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        playbackManager.persistPlaybackSession(immediate = true)
         mediaSession?.run {
             player.release()
             release()
@@ -113,3 +114,4 @@ class SyncWaveMediaSessionService : MediaSessionService() {
         const val ACTION_SCHEDULE_PLAY = "com.syncwave.music.ACTION_SCHEDULE_PLAY"
     }
 }
+

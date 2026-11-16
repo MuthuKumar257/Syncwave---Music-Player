@@ -6,6 +6,7 @@ import com.syncwave.music.domain.model.RepeatMode
 import com.syncwave.music.domain.model.Song
 import com.syncwave.music.domain.repository.MusicRepository
 import com.syncwave.music.playback.manager.PlaybackManager
+import com.syncwave.music.playback.sync.PlaybackSessionCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,10 +16,17 @@ import javax.inject.Inject
 @HiltViewModel
 class NowPlayingViewModel @Inject constructor(
     private val playbackManager: PlaybackManager,
-    private val musicRepository: MusicRepository
+    private val musicRepository: MusicRepository,
+    private val sessionCoordinator: PlaybackSessionCoordinator
 ) : ViewModel() {
 
     val playbackState = playbackManager.playbackState
+    val deviceSessionState = sessionCoordinator.sessionState
+    val sleepTimerRemainingMs = playbackManager.sleepTimerRemainingMs
+
+    fun transferToDevice(targetDeviceId: String) {
+        sessionCoordinator.transferToDevice(targetDeviceId)
+    }
 
     private val _isSleepTimerActive = MutableStateFlow(false)
     val isSleepTimerActive = _isSleepTimerActive.asStateFlow()
@@ -56,6 +64,12 @@ class NowPlayingViewModel @Inject constructor(
         }
     }
 
+    fun removeQueueItem(index: Int) = playbackManager.removeQueueItem(index)
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) = playbackManager.moveQueueItem(fromIndex, toIndex)
+
+    fun clearQueue() = playbackManager.clearQueue()
+
     fun toggleFavorite() {
         val song = playbackState.value.currentSong ?: return
         viewModelScope.launch {
@@ -74,4 +88,12 @@ class NowPlayingViewModel @Inject constructor(
             _isSleepTimerActive.value = true
         }
     }
+
+    fun setSleepTimerAtTime(hour24: Int, minute: Int) {
+        playbackManager.startSleepTimerAtTime(hour24, minute) {
+            _isSleepTimerActive.value = false
+        }
+        _isSleepTimerActive.value = true
+    }
 }
+

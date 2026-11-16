@@ -63,3 +63,4 @@ data class ScheduleExecutionRecord(
     val success: Boolean,
     val statusMessage: String
 )
+

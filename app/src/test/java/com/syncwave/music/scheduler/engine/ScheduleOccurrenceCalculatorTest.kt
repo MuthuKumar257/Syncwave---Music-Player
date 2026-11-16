@@ -99,4 +99,29 @@ class ScheduleOccurrenceCalculatorTest {
 
         assertNull(epochMs)
     }
+
+    @Test
+    fun calculateNextOccurrence_preservesExactOneMinuteIntervals() {
+        val minuteCases = listOf(1, 2, 3, 4, 17, 43, 59)
+        val from = LocalDateTime.of(2026, 11, 12, 10, 0)
+
+        for (minute in minuteCases) {
+            val padded = minute.toString().padStart(2, '0')
+            val schedule = MusicSchedule(
+                id = "s_min_$padded",
+                name = "Minute $padded",
+                startTime = "10:$padded",
+                repeatType = RepeatType.DAILY,
+                targetType = ScheduleTargetType.PLAYLIST,
+                targetId = "pl1",
+                targetName = "Exact Mix",
+                isEnabled = true
+            )
+            val epochMs = ScheduleOccurrenceCalculator.calculateNextOccurrenceEpochMs(schedule, from)
+            val expected = LocalDateTime.of(2026, 11, 12, 10, minute)
+                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            assertTrue("Expected exact 10:$padded without snapping", epochMs == expected)
+        }
+    }
 }
+

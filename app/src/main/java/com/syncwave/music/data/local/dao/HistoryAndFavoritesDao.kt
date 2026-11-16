@@ -58,3 +58,4 @@ interface HistoryAndFavoritesDao {
     @Query("DELETE FROM download_tasks WHERE id = :id")
     suspend fun deleteDownloadTask(id: String)
 }
+

@@ -19,7 +19,9 @@ data class Song(
     val genre: String? = null,
     val dateAdded: Long = System.currentTimeMillis(),
     val isFavorite: Boolean = false,
-    val source: AudioSource = AudioSource.LOCAL
+    val source: AudioSource = AudioSource.LOCAL,
+    val fileFormat: String = "",
+    val folderName: String? = null
 )
 
 data class Album(
@@ -48,3 +50,4 @@ data class Playlist(
     val updatedAt: Long = System.currentTimeMillis(),
     val isFavorite: Boolean = false
 )
+

@@ -14,6 +14,7 @@ import com.syncwave.music.domain.model.TransitionType
 import com.syncwave.music.domain.repository.MusicRepository
 import com.syncwave.music.domain.repository.PlaylistRepository
 import com.syncwave.music.domain.repository.ScheduleRepository
+import com.syncwave.music.domain.utils.TimeSelectionUtils
 import com.syncwave.music.scheduler.engine.ScheduleAlarmScheduler
 import com.syncwave.music.scheduler.engine.ScheduleOccurrenceCalculator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,7 +52,8 @@ data class ScheduleFormState(
     val availableSongs: List<Song> = emptyList(),
     val isSaving: Boolean = false,
     val saveSuccess: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val formVersion: Long = 0L
 )
 
 @HiltViewModel
@@ -120,8 +122,8 @@ class SchedulerViewModel @Inject constructor(
             _formState.value = _formState.value.copy(
                 id = schedule.id,
                 name = schedule.name,
-                timeHour = hour,
-                timeMinute = minute,
+                timeHour = hour.coerceIn(0, 23),
+                timeMinute = minute.coerceIn(0, 59),
                 repeatType = schedule.repeatType,
                 selectedDays = schedule.daysOfWeek,
                 targetType = schedule.targetType,
@@ -130,7 +132,8 @@ class SchedulerViewModel @Inject constructor(
                 priority = schedule.priority,
                 transitionType = schedule.transitionType,
                 transitionSec = schedule.transitionDurationSec,
-                volume = schedule.volume
+                volume = schedule.volume,
+                formVersion = _formState.value.formVersion + 1L
             )
         }
     }
@@ -138,12 +141,25 @@ class SchedulerViewModel @Inject constructor(
     fun resetForm() {
         _formState.value = ScheduleFormState(
             availablePlaylists = _formState.value.availablePlaylists,
-            availableSongs = _formState.value.availableSongs
+            availableSongs = _formState.value.availableSongs,
+            formVersion = _formState.value.formVersion + 1L
         )
     }
 
     fun updateForm(transform: (ScheduleFormState) -> ScheduleFormState) {
         _formState.value = transform(_formState.value)
+    }
+
+    fun createAndSelectPlaylist(name: String) {
+        viewModelScope.launch {
+            if (name.isBlank()) return@launch
+            val playlist = playlistRepository.createPlaylist(name.trim())
+            _formState.value = _formState.value.copy(
+                targetType = ScheduleTargetType.PLAYLIST,
+                targetId = playlist.id,
+                targetName = playlist.name
+            )
+        }
     }
 
     fun toggleScheduleEnabled(schedule: MusicSchedule, isEnabled: Boolean) {
@@ -178,7 +194,7 @@ class SchedulerViewModel @Inject constructor(
 
         viewModelScope.launch {
             _formState.value = current.copy(isSaving = true, errorMessage = null)
-            val startTimeStr = String.format("%02d:%02d", current.timeHour, current.timeMinute)
+            val startTimeStr = TimeSelectionUtils.formatCanonical24Hour(current.timeHour, current.timeMinute)
 
             val schedule = MusicSchedule(
                 id = current.id,
@@ -204,3 +220,4 @@ class SchedulerViewModel @Inject constructor(
         }
     }
 }
+

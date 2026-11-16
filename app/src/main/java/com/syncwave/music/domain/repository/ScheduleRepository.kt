@@ -17,3 +17,4 @@ interface ScheduleRepository {
     fun getExecutionHistory(limit: Int = 50): Flow<List<ScheduleExecutionRecord>>
     suspend fun recordExecution(record: ScheduleExecutionRecord)
 }
+
