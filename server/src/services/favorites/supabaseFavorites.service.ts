@@ -1,5 +1,6 @@
 import { syncStore } from '../../db/store';
 import { RecommendationEngineService } from '../recommendation/recommendationEngine.service';
+import { UnifiedTrack } from '../search/searchAggregator.service';
 
 interface SupabaseCredentials {
   url: string;
@@ -71,30 +72,121 @@ export class SupabaseFavoritesService {
   }
 
   /**
-   * Fetch favorite song IDs for a given authenticated user from Supabase
+   * Fetch fully populated favorite song objects for an authenticated user
    */
-  static async getUserFavoriteIds(userId: string): Promise<string[]> {
-    if (!userId || !this.getCredentials()) return [];
+  static async getUserFavorites(userId: string): Promise<UnifiedTrack[]> {
+    if (!userId) return [];
 
-    try {
-      const rows = await this.supabaseRequest<Array<{ target_id: string; song_id?: string }>>(
-        'favorites',
-        {
+    const creds = this.getCredentials();
+    if (creds) {
+      try {
+        const rows = await this.supabaseRequest<
+          Array<{
+            target_id: string;
+            song_id?: string;
+            song_title?: string;
+            artist_name?: string;
+            artwork_url?: string;
+            duration_ms?: number | string;
+            composer?: string;
+            movie_name?: string;
+            language?: string;
+            added_at?: string;
+          }>
+        >('favorites', {
           method: 'GET',
-          query: `user_id=eq.${encodeURIComponent(userId)}&select=target_id&order=added_at.desc`
+          query: `user_id=eq.${encodeURIComponent(userId)}&order=added_at.desc`
+        });
+
+        if (Array.isArray(rows) && rows.length > 0) {
+          return rows.map((r) => {
+            const id = r.target_id || r.song_id || 'unknown';
+            const local = syncStore.getSongById(id) || RecommendationEngineService.findTrackById(id);
+            return {
+              id,
+              title: r.song_title || local?.title || id.replace(/_/g, ' '),
+              artist: r.artist_name || local?.artist || 'Unknown Artist',
+              composer: r.composer || (local as any)?.composer,
+              movieName: r.movie_name || (local as any)?.movieName || (local as any)?.album,
+              artworkUrl: r.artwork_url || local?.artworkUrl || '',
+              durationMs: Number(r.duration_ms) || local?.durationMs || 240000,
+              sourcePlatform: ((local as any)?.sourcePlatform || (local as any)?.source || 'OPEN_AUDIO') as any,
+              sourceUrl: (local as any)?.sourceUrl || (local as any)?.externalUrl || '',
+              isPlayableDirectly: true,
+              versionType: 'ORIGINAL' as any,
+              language: (r.language as any) || (local as any)?.language
+            };
+          });
         }
-      );
-      if (Array.isArray(rows)) {
-        return rows.map((r) => r.target_id || r.song_id!).filter(Boolean);
-      }
-    } catch (err: any) {
-      // Graceful fallback: table might not exist yet in Supabase
-      if (!err?.message?.includes('PGRST205')) {
-        console.warn('[SupabaseFavoritesService] getUserFavoriteIds error:', err?.message || err);
+      } catch (err: any) {
+        if (!err?.message?.includes('PGRST205')) {
+          console.warn('[SupabaseFavoritesService] getUserFavorites cloud error:', err?.message || err);
+        }
       }
     }
 
-    return [];
+    // Fallback: Resolve from local memory / persistent store
+    const localIds = syncStore.getUserFavorites(userId);
+    return localIds
+      .map((id) => {
+        const s = syncStore.getSongById(id) || RecommendationEngineService.findTrackById(id);
+        if (s) {
+          return {
+            id: s.id,
+            title: s.title,
+            artist: s.artist,
+            composer: (s as any).composer,
+            movieName: (s as any).movieName || (s as any).album,
+            artworkUrl: s.artworkUrl || '',
+            durationMs: s.durationMs || 240000,
+            sourcePlatform: ((s as any).sourcePlatform || (s as any).source || 'OPEN_AUDIO') as any,
+            sourceUrl: (s as any).sourceUrl || (s as any).externalUrl || '',
+            isPlayableDirectly: true,
+            versionType: 'ORIGINAL' as any,
+            language: (s as any).language
+          };
+        }
+        return {
+          id,
+          title: id.replace(/_/g, ' '),
+          artist: 'Unknown Artist',
+          durationMs: 240000,
+          artworkUrl: '',
+          sourcePlatform: 'OPEN_AUDIO' as any,
+          sourceUrl: '',
+          isPlayableDirectly: true,
+          versionType: 'ORIGINAL' as any
+        };
+      });
+  }
+
+  /**
+   * Fetch favorite song IDs for a given authenticated user from Supabase
+   */
+  static async getUserFavoriteIds(userId: string): Promise<string[]> {
+    if (!userId) return syncStore.getUserFavorites(userId);
+
+    const creds = this.getCredentials();
+    if (creds) {
+      try {
+        const rows = await this.supabaseRequest<Array<{ target_id: string; song_id?: string }>>(
+          'favorites',
+          {
+            method: 'GET',
+            query: `user_id=eq.${encodeURIComponent(userId)}&select=target_id&order=added_at.desc`
+          }
+        );
+        if (Array.isArray(rows) && rows.length > 0) {
+          return rows.map((r) => r.target_id || r.song_id!).filter(Boolean);
+        }
+      } catch (err: any) {
+        if (!err?.message?.includes('PGRST205')) {
+          console.warn('[SupabaseFavoritesService] getUserFavoriteIds error:', err?.message || err);
+        }
+      }
+    }
+
+    return syncStore.getUserFavorites(userId);
   }
 
   /**
@@ -108,11 +200,50 @@ export class SupabaseFavoritesService {
       artist?: string;
       artworkUrl?: string;
       durationMs?: number;
+      composer?: string;
+      movieName?: string;
+      language?: string;
     }
   ): Promise<boolean> {
-    if (!userId || !targetId || !this.getCredentials()) return false;
+    if (!userId || !targetId) return false;
+
+    // 1. Keep in-memory store synchronized immediately
+    syncStore.addFavorite(userId, targetId);
+    if (metadata?.title) {
+      try {
+        syncStore.saveSong({
+          id: targetId,
+          title: metadata.title,
+          artist: metadata.artist || 'Unknown Artist',
+          album: metadata.movieName || 'Unknown Album',
+          durationMs: metadata.durationMs || 0,
+          artworkUrl: metadata.artworkUrl,
+          source: 'YOUTUBE',
+          createdAt: new Date().toISOString()
+        });
+      } catch {}
+    }
+
+    // 2. Cloud Supabase synchronization
+    const creds = this.getCredentials();
+    if (!creds) return true;
 
     try {
+      // Upsert master song record first to satisfy any foreign keys
+      await this.supabaseRequest('songs', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: {
+          id: targetId,
+          title: metadata?.title || 'Unknown Title',
+          artist: metadata?.artist || 'Unknown Artist',
+          artwork_url: metadata?.artworkUrl,
+          duration_ms: metadata?.durationMs || 0,
+          created_at: new Date().toISOString()
+        }
+      }).catch(() => {});
+
+      // Insert / merge into favorites
       await this.supabaseRequest('favorites', {
         method: 'POST',
         prefer: 'resolution=merge-duplicates',
@@ -120,10 +251,14 @@ export class SupabaseFavoritesService {
           user_id: userId,
           target_id: targetId,
           target_type: 'SONG',
+          song_id: targetId,
           song_title: metadata?.title || undefined,
           artist_name: metadata?.artist || undefined,
           artwork_url: metadata?.artworkUrl || undefined,
           duration_ms: metadata?.durationMs || undefined,
+          composer: metadata?.composer || undefined,
+          movie_name: metadata?.movieName || undefined,
+          language: metadata?.language || undefined,
           added_at: new Date().toISOString()
         }
       });
@@ -140,7 +275,13 @@ export class SupabaseFavoritesService {
    * Delete a favorite record from Supabase
    */
   static async removeFavorite(userId: string, targetId: string): Promise<boolean> {
-    if (!userId || !targetId || !this.getCredentials()) return false;
+    if (!userId || !targetId) return false;
+
+    // Remove from in-memory store immediately
+    syncStore.removeFavorite(userId, targetId);
+
+    const creds = this.getCredentials();
+    if (!creds) return true;
 
     try {
       await this.supabaseRequest('favorites', {

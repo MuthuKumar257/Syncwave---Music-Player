@@ -9,14 +9,17 @@ import {
   Alert,
   StyleSheet
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { Track } from '../../api/types';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { useDownloadStore } from '../../store/useDownloadStore';
 import { useSearchStore } from '../../store/useSearchStore';
+import { useRecommendationStore } from '../../store/useRecommendationStore';
 import { SaveToPlaylistModal } from './SaveToPlaylistModal';
 import { shareSong } from '../../utils/shareUtils';
 import { Colors } from '../../theme/colors';
@@ -47,6 +50,7 @@ export const SongContextMenuModal: React.FC<SongContextMenuModalProps> = ({
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { playTrack, playNextInQueue, addToQueue, removeFromQueue } = usePlayerStore();
   const { isFavorite, toggleFavorite, removeTrackFromPlaylist } = useLibraryStore();
+  const { isAuthenticated } = useAuthStore();
   const { isDownloaded, downloadTrack, deleteTrack, getDownloadError } = useDownloadStore();
 
   const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false);
@@ -79,6 +83,28 @@ export const SongContextMenuModal: React.FC<SongContextMenuModalProps> = ({
   // 4. Toggle Liked Songs
   const handleToggleFavorite = async () => {
     onClose();
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to Save Favorites',
+        'Save your favorite songs and access them across all your devices by signing in to SyncWave.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sign In',
+            onPress: async () => {
+              try {
+                await AsyncStorage.setItem('@syncwave_pending_fav_track', JSON.stringify(track));
+              } catch {}
+              try {
+                navigation.navigate('Login');
+              } catch {}
+            }
+          }
+        ]
+      );
+      return;
+    }
+
     const isNowFav = await toggleFavorite(track);
     Alert.alert(
       isNowFav ? 'Added to Favorites' : 'Removed from Favorites',
@@ -126,7 +152,21 @@ export const SongContextMenuModal: React.FC<SongContextMenuModalProps> = ({
     }
   };
 
-  // 9. Context-aware Delete / Remove
+  // 9. Not Interested (Personalization Signal)
+  const handleNotInterested = async () => {
+    onClose();
+    try {
+      await useRecommendationStore.getState().markNotInterested(track.id);
+      Alert.alert(
+        'Not Interested',
+        `We'll recommend fewer songs like "${track.title}".`
+      );
+    } catch (err) {
+      console.warn('[SongContextMenuModal] Not Interested error:', err);
+    }
+  };
+
+  // 10. Context-aware Delete / Remove
   const handleDeleteAction = () => {
     if (context === 'queue') {
       onClose();
@@ -278,6 +318,12 @@ export const SongContextMenuModal: React.FC<SongContextMenuModalProps> = ({
               <TouchableOpacity style={styles.menuRow} onPress={handleShare} activeOpacity={0.7}>
                 <Text style={styles.menuIcon}>↗</Text>
                 <Text style={styles.menuLabel}>Share</Text>
+              </TouchableOpacity>
+
+              {/* 9. Not Interested */}
+              <TouchableOpacity style={styles.menuRow} onPress={handleNotInterested} activeOpacity={0.7}>
+                <Text style={styles.menuIcon}>🚫</Text>
+                <Text style={styles.menuLabel}>Not Interested</Text>
               </TouchableOpacity>
 
               <View style={styles.divider} />

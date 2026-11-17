@@ -40,13 +40,16 @@ export type MovieSoundtrack = z.infer<typeof MovieSoundtrackSchema>;
 export const ArtistItemSchema = z.object({
   id: z.string(),
   name: z.string(),
+  canonicalName: z.string().optional(),
   category: z.string().optional(),
-  role: z.enum(['DIRECTOR', 'SINGER']),
+  role: z.enum(['DIRECTOR', 'SINGER', 'ALL']).or(z.string()),
   roleTitle: z.string().optional(),
   languages: z.array(z.string()),
   imageUrl: z.string(),
-  knownFor: z.array(z.string()),
-  popularTracks: z.array(z.string())
+  knownFor: z.array(z.string()).optional().default([]),
+  popularTracks: z.array(z.string()).optional().default([]),
+  aliases: z.array(z.string()).optional(),
+  description: z.string().optional()
 });
 
 export type ArtistItem = z.infer<typeof ArtistItemSchema>;
@@ -105,6 +108,27 @@ export interface SingerGroup {
   tracks: Track[];
 }
 
+export interface DailyMixItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  language: string;
+  coverUrl: string;
+  trackCount: number;
+  tracks: Track[];
+}
+
+export interface MoodPlaylistItem {
+  id: string;
+  mood: string;
+  title: string;
+  description: string;
+  artworkUrl: string;
+  accentColor: string;
+  trackCount: number;
+  tracks: Track[];
+}
+
 export interface PersonalizedFeed {
   greeting: string;
   timeOfDay: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
@@ -113,9 +137,27 @@ export interface PersonalizedFeed {
   preferredLanguages: string[];
   requiresLanguageSelection?: boolean;
 
-  // 10 Explicit Dashboard Sections
+  // 15 Explicit Dynamic Home Sections:
+  madeForYou?: Track[];
+  dailyMixes?: DailyMixItem[];
+  becauseYouListenedTo?: {
+    basedOn: string;
+    tracks: Track[];
+  };
+  basedOnFavouriteArtists?: Track[];
+  basedOnFavouriteDirectors?: Track[];
   recentlyPlayed: Track[];
+  favouriteSongs?: Track[];
+  similarToFavouriteSongs?: Track[];
+  trendingInLanguages: Track[];
+  newReleases: Track[];
+  discoverSomethingNew?: Track[];
+  yourMoodMix?: MoodPlaylistItem[];
   continueListening: Track[];
+  mostPlayedArtists?: ArtistGroup[];
+  songsYouMayLike?: Track[];
+
+  // Backward-compatible fields:
   recommendedForYou: Track[];
   basedOnListeningHistory: {
     basedOn: string;
@@ -130,8 +172,6 @@ export interface PersonalizedFeed {
   favouriteArtists?: ArtistGroup[];
   favouriteMusicDirectors: DirectorGroup[];
   favouriteSingers: SingerGroup[];
-  trendingInLanguages: Track[];
-  newReleases: Track[];
   discoverNewMusic: Track[];
   movieSoundtracks: MovieSoundtrack[];
 }

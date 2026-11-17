@@ -39,3 +39,4 @@ ehthumbs.db
 *.tmp
 *.bak
 *~
+server/data/*.backup-*.json

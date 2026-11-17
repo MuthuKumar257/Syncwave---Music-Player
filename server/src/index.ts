@@ -1,6 +1,22 @@
 import 'dotenv/config';
 import { app } from './app';
 
+// Validate production environment variables on startup
+if (process.env.NODE_ENV === 'production') {
+  const missingVars: string[] = [];
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret || secret === 'syncwave-super-secret-jwt-key-2026') {
+    missingVars.push('JWT_SECRET (must be configured to a cryptographically strong secret)');
+  }
+  if (!process.env.SUPABASE_URL && !process.env.SUPABASE_ANON_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('[SyncWave Backend] Warning: SUPABASE_URL / keys not configured. Playback history will run on in-memory storage.');
+  }
+  if (missingVars.length > 0 && process.env.STRICT_SECURITY === 'true') {
+    console.error('[SyncWave Backend] Startup halted due to missing production environment variables:', missingVars);
+    process.exit(1);
+  }
+}
+
 const PORT = Number(process.env.PORT) || 3001;
 
 const server = app.listen(PORT, () => {

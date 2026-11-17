@@ -39,6 +39,87 @@ const ARTWORK_PRESETS = [
   'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=500'
 ];
 
+const STARTER_CATALOGUE_SONGS: Track[] = [
+  {
+    id: 'tamil_song_1',
+    title: 'Nenjukkul Peidhidum',
+    artist: 'Hariharan, Harris Jayaraj',
+    composer: 'Harris Jayaraj',
+    movieName: 'Vaaranam Aayiram',
+    durationMs: 372000,
+    language: 'Tamil',
+    artworkUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
+    sourcePlatform: 'LOCAL',
+    sourceUrl: '',
+    isPlayableDirectly: true
+  },
+  {
+    id: 'tamil_song_2',
+    title: 'Adiye',
+    artist: 'Sid Sriram',
+    composer: 'A.R. Rahman',
+    movieName: 'Kadal',
+    durationMs: 304000,
+    language: 'Tamil',
+    artworkUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500',
+    sourcePlatform: 'LOCAL',
+    sourceUrl: '',
+    isPlayableDirectly: true
+  },
+  {
+    id: 'hindi_song_1',
+    title: 'Kesariya',
+    artist: 'Arijit Singh',
+    composer: 'Pritam',
+    movieName: 'Brahmastra',
+    durationMs: 268000,
+    language: 'Hindi',
+    artworkUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500',
+    sourcePlatform: 'LOCAL',
+    sourceUrl: '',
+    isPlayableDirectly: true
+  },
+  {
+    id: 'tamil_song_3',
+    title: 'Arabic Kuthu',
+    artist: 'Anirudh Ravichander, Jonita Gandhi',
+    composer: 'Anirudh Ravichander',
+    movieName: 'Beast',
+    durationMs: 279000,
+    language: 'Tamil',
+    artworkUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500',
+    sourcePlatform: 'LOCAL',
+    sourceUrl: '',
+    isPlayableDirectly: true
+  },
+  {
+    id: 'malayalam_song_1',
+    title: 'Aalolam',
+    artist: 'Job Kurian',
+    composer: 'Sushin Shyam',
+    movieName: 'Lovefully Yours Veda',
+    durationMs: 236000,
+    language: 'Malayalam',
+    artworkUrl: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=500',
+    sourcePlatform: 'LOCAL',
+    sourceUrl: '',
+    isPlayableDirectly: true
+  },
+  {
+    id: 'telugu_song_1',
+    title: 'Inkem Inkem',
+    artist: 'Sid Sriram',
+    composer: 'Gopi Sundar',
+    movieName: 'Geetha Govindam',
+    durationMs: 268000,
+    language: 'Telugu',
+    artworkUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
+    sourcePlatform: 'LOCAL',
+    sourceUrl: '',
+    isPlayableDirectly: true
+  }
+];
+
 type CatalogueCategory = 'ALL' | 'FAVORITES' | 'DEVICE' | 'RECOMMENDED';
 
 export const PlaylistDetailScreen: React.FC = () => {
@@ -64,15 +145,19 @@ export const PlaylistDetailScreen: React.FC = () => {
 
   const playlist = playlists.find((p) => p.id === playlistId);
   const [isLoading, setIsLoading] = useState(!playlist);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Fetch playlist details on mount
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
+      setIsLoading(true);
+      setFetchError(null);
       try {
         await fetchPlaylistDetails(playlistId);
-      } catch (err) {
+      } catch (err: any) {
         console.warn('[PlaylistDetailScreen] fetch details error:', err);
+        if (isMounted) setFetchError(err?.message || 'Unable to load playlist details.');
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -134,6 +219,7 @@ export const PlaylistDetailScreen: React.FC = () => {
     }
 
     const map = new Map<string, Track>();
+    for (const t of STARTER_CATALOGUE_SONGS) map.set(t.id, t);
     for (const t of favoriteTracks) map.set(t.id, t);
     for (const t of localTracks) if (!map.has(t.id)) map.set(t.id, t);
     for (const t of feedTracks) if (!map.has(t.id)) map.set(t.id, t);
@@ -338,6 +424,48 @@ export const PlaylistDetailScreen: React.FC = () => {
     );
   }
 
+  // Error state
+  if (fetchError && !playlist) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backText}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Error Loading Playlist</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>⚠️</Text>
+          <Text style={styles.emptyTitle}>Could Not Load Playlist</Text>
+          <Text style={styles.emptySubtitle}>{fetchError}</Text>
+          <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md }}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => {
+                setIsLoading(true);
+                setFetchError(null);
+                void fetchPlaylistDetails(playlistId)
+                  .catch((err: any) => setFetchError(err?.message || 'Failed to connect'))
+                  .finally(() => setIsLoading(false));
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionBtnText}>↻ Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: Colors.surfaceRaised }]}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionBtnText}>Back to Library</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Not found state
   if (!playlist) {
     return (
@@ -491,6 +619,7 @@ export const PlaylistDetailScreen: React.FC = () => {
                 context="playlist"
                 playlistId={playlist.id}
                 onPress={() => playTrack(track, playlist.tracks)}
+                onPlayPress={() => playTrack(track, playlist.tracks)}
               />
             </View>
 

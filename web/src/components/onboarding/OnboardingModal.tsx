@@ -480,8 +480,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
                           <span className="text-[10px] text-[#F59E0B]/80 font-medium line-clamp-1 mb-0.5">
                             {artist.roleTitle || (artist.role === 'DIRECTOR' ? 'Music Director' : 'Playback Singer')}
                           </span>
+                          {artist.languages && artist.languages.length > 0 && (
+                            <span className="text-[9px] text-[#A1A1A6] line-clamp-1 mb-0.5">
+                              {artist.languages.slice(0, 3).join(' • ')}
+                            </span>
+                          )}
                           <span className="text-[10px] text-[#85858B] line-clamp-1">
-                            {artist.knownFor.slice(0, 2).join(', ')}
+                            {artist.knownFor?.slice(0, 2).join(', ') || ''}
                           </span>
                         </button>
                       );

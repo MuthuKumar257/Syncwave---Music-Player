@@ -95,29 +95,28 @@ export const MiniPlayer: React.FC = () => {
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="bg-surface border-t border-hairline px-4 py-2 flex flex-col z-30 select-none">
+    <div className="bg-surface border-t border-hairline px-3 md:px-4 py-1.5 md:py-2 flex flex-col z-30 select-none shrink-0">
       {/* Remote Playback Status Banner when another device owns audio */}
       {isRemoteMode && (
-        <div className="mb-2 -mx-4 -mt-2 px-4 py-1.5 bg-accent/15 border-b border-accent/30 flex items-center justify-between gap-2 text-[11px]">
-          <div className="flex items-center gap-2 text-accent font-medium min-w-0">
+        <div className="mb-1.5 -mx-3 md:-mx-4 -mt-1.5 md:-mt-2 px-3 md:px-4 py-1 bg-accent/15 border-b border-accent/30 flex items-center justify-between gap-2 text-[10px] md:text-[11px]">
+          <div className="flex items-center gap-1.5 text-accent font-medium min-w-0">
             <MonitorSpeaker className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">
-              Playing on {activeDevice?.deviceName || 'another device'} &bull; This browser is
-              acting as a remote
+              Playing on {activeDevice?.deviceName || 'another device'} &bull; Remote
             </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => void transferPlayback(myDeviceId)}
-              className="px-2 py-0.5 rounded bg-accent text-black font-semibold hover:brightness-110 transition"
+              className="px-2 py-0.5 rounded bg-accent text-black font-semibold hover:brightness-110 transition text-[10px]"
             >
               Play here
             </button>
             <button
               type="button"
               onClick={() => setDevicePickerOpen(true)}
-              className="text-text-secondary hover:text-text-primary underline"
+              className="text-text-secondary hover:text-text-primary underline text-[10px]"
             >
               Switch
             </button>
@@ -125,8 +124,8 @@ export const MiniPlayer: React.FC = () => {
         </div>
       )}
 
-      {/* Scrubber Rail */}
-      <div className="w-full -mt-2 mb-1 group cursor-pointer relative py-1">
+      {/* 1. Thin Scrubber Progress Rail (Full Width) */}
+      <div className="w-full -mt-1 mb-1 group cursor-pointer relative py-0.5">
         <input
           type="range"
           min={0}
@@ -135,15 +134,161 @@ export const MiniPlayer: React.FC = () => {
           onChange={(e) => seek(parseFloat(e.target.value))}
           className="w-full h-1 bg-surface-elevated appearance-none cursor-pointer rounded overflow-hidden"
           style={{
-            background: `linear-gradient(to right, #ededed 0%, #ededed ${progressPercent}%, rgba(237, 237, 237, 0.1) ${progressPercent}%, rgba(237, 237, 237, 0.1) 100%)`
+            background: `linear-gradient(to right, #F59E0B 0%, #F59E0B ${progressPercent}%, rgba(237, 237, 237, 0.12) ${progressPercent}%, rgba(237, 237, 237, 0.12) 100%)`
           }}
         />
       </div>
 
-      <div className="flex items-center justify-between gap-4 h-12">
+      {/* ========================================================= */}
+      {/* 2A. MOBILE COMPACT PLAYER CONTROLS ROW (md:hidden)        */}
+      {/* Aligned single horizontal row with compact icons          */}
+      {/* ========================================================= */}
+      <div className="flex md:hidden items-center justify-between h-11 gap-1">
+        {/* Left: Small Song Thumbnail & Title */}
+        <div
+          className="flex items-center gap-2 min-w-0 flex-1 max-w-[130px] sm:max-w-[160px] cursor-pointer"
+          onClick={() => currentSong && setNowPlayingOpen(true)}
+        >
+          <div className="w-8 h-8 rounded-control bg-surface-elevated overflow-hidden shrink-0 relative flex items-center justify-center border border-hairline">
+            {currentSong ? (
+              <ArtworkImage
+                src={currentSong.artworkUrl}
+                alt={currentSong.title}
+                iconClassName="w-3.5 h-3.5 text-text-muted"
+              />
+            ) : (
+              <Music className="w-3.5 h-3.5 text-text-muted" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-text-primary truncate leading-tight">
+              {currentSong?.title || 'Remote Session'}
+            </p>
+            <p className="text-[10px] text-text-muted truncate leading-tight mt-0.5">
+              {currentSong?.artist || (activeDevice ? activeDevice.deviceName : 'SyncWave')}
+            </p>
+          </div>
+        </div>
+
+        {/* Right: Horizontally Aligned Compact Controls */}
+        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+          {/* Download Button */}
+          <button
+            onClick={handleDownload}
+            disabled={isDownloading || downloaded || !currentSong}
+            className={`p-1 rounded-control transition-colors ${
+              downloaded ? 'text-emerald-400' : 'text-text-muted hover:text-text-primary'
+            }`}
+            title={downloaded ? 'Downloaded offline' : 'Download song'}
+          >
+            {isDownloading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+            ) : downloaded ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {/* Favourite Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (currentSong) toggleFavorite(currentSong.id);
+            }}
+            className="p-1 rounded-control text-text-muted hover:text-text-primary transition-colors"
+            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart
+              className={`w-3.5 h-3.5 ${
+                isFav ? 'text-accent fill-accent' : 'text-text-muted'
+              }`}
+            />
+          </button>
+
+          {/* Previous Song */}
+          <button
+            onClick={playPrevious}
+            className="p-1 rounded-control text-text-muted hover:text-text-primary transition-colors"
+            title="Previous song"
+          >
+            <SkipBack className="w-3.5 h-3.5 fill-current" />
+          </button>
+
+          {/* Play / Pause Button (Prominent) */}
+          <button
+            onClick={togglePlay}
+            className="w-7 h-7 rounded-full bg-accent text-black hover:brightness-110 flex items-center justify-center transition-all active:scale-95 shadow-subtle shrink-0"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? (
+              <Pause className="w-3.5 h-3.5 fill-current" />
+            ) : (
+              <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+            )}
+          </button>
+
+          {/* Next Song */}
+          <button
+            onClick={playNext}
+            className="p-1 rounded-control text-text-muted hover:text-text-primary transition-colors"
+            title="Next song"
+          >
+            <SkipForward className="w-3.5 h-3.5 fill-current" />
+          </button>
+
+          {/* Sleep Timer */}
+          <button
+            type="button"
+            onClick={() => setShowSleepTimerModal(true)}
+            className={`p-1 rounded-control transition-colors ${
+              sleepTimerRemainingSec > 0
+                ? 'text-accent'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+            title="Sleep timer"
+          >
+            <Moon className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Queue Button */}
+          <button
+            type="button"
+            onClick={() => setQueueOpen(!isQueueOpen)}
+            className={`p-1 rounded-control transition-colors ${
+              isQueueOpen
+                ? 'text-accent'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+            title="Queue"
+          >
+            <ListMusic className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Device / Audio Output */}
+          <button
+            type="button"
+            onClick={() => setDevicePickerOpen(true)}
+            className={`p-1 rounded-control transition-colors ${
+              isRemoteMode
+                ? 'text-accent'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+            title="Audio output devices"
+          >
+            <MonitorSpeaker className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* 2B. DESKTOP FULL-FEATURED PLAYER (hidden md:flex)         */}
+      {/* Preserves full desktop layout & volume controls           */}
+      {/* ========================================================= */}
+      <div className="hidden md:flex items-center justify-between gap-4 h-12">
         {/* Left: Song Metadata */}
         <div
-          className="flex items-center gap-3 min-w-0 flex-1 md:flex-initial md:w-72 cursor-pointer group"
+          className="flex items-center gap-3 min-w-0 md:w-72 cursor-pointer group"
           onClick={() => currentSong && setNowPlayingOpen(true)}
         >
           <div className="w-10 h-10 rounded-control bg-surface-elevated overflow-hidden shrink-0 relative flex items-center justify-center border border-hairline">
@@ -161,7 +306,7 @@ export const MiniPlayer: React.FC = () => {
             </div>
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-text-primary truncate">
               {currentSong?.title || 'Remote Session Idle'}
             </p>
@@ -180,11 +325,7 @@ export const MiniPlayer: React.FC = () => {
                     ? 'text-emerald-400'
                     : 'text-text-muted hover:text-text-primary'
                 }`}
-                title={
-                  downloaded
-                    ? 'Saved to Local (Plays offline)'
-                    : 'Download online song to local library'
-                }
+                title={downloaded ? 'Saved to Local' : 'Download song'}
               >
                 {isDownloading ? (
                   <Loader2 className="w-4 h-4 animate-spin text-accent" />
@@ -218,9 +359,10 @@ export const MiniPlayer: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={toggleShuffle}
-              className={`hidden md:block p-1.5 rounded-control transition-colors ${
+              className={`p-1.5 rounded-control transition-colors ${
                 isShuffle ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
               }`}
+              title="Shuffle"
             >
               <Shuffle className="w-3.5 h-3.5" />
             </button>
@@ -228,6 +370,7 @@ export const MiniPlayer: React.FC = () => {
             <button
               onClick={playPrevious}
               className="p-1.5 rounded-control text-text-muted hover:text-text-primary transition-colors"
+              title="Previous"
             >
               <SkipBack className="w-4 h-4 fill-current" />
             </button>
@@ -235,6 +378,7 @@ export const MiniPlayer: React.FC = () => {
             <button
               onClick={togglePlay}
               className="w-8 h-8 rounded-control bg-primary text-primary-dark hover:bg-white flex items-center justify-center transition-colors active:scale-95 shadow-subtle"
+              title={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
                 <Pause className="w-4 h-4 fill-current" />
@@ -246,28 +390,30 @@ export const MiniPlayer: React.FC = () => {
             <button
               onClick={playNext}
               className="p-1.5 rounded-control text-text-muted hover:text-text-primary transition-colors"
+              title="Next"
             >
               <SkipForward className="w-4 h-4 fill-current" />
             </button>
 
             <button
               onClick={toggleRepeat}
-              className={`hidden md:block p-1.5 rounded-control transition-colors ${
+              className={`p-1.5 rounded-control transition-colors ${
                 repeatMode !== 'OFF' ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
               }`}
+              title="Repeat"
             >
               <Repeat className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="hidden md:flex items-center gap-1.5 text-[11px] tabular-nums text-text-muted font-mono">
+          <div className="flex items-center gap-1.5 text-[11px] tabular-nums text-text-muted font-mono">
             <span>{formatTime(currentTime)}</span>
             <span>/</span>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
 
-        {/* Right: Sleep Timer, Device Connect & Audio Volume Control */}
+        {/* Right: Sleep Timer, Queue, Device Connect & Volume Slider */}
         <div className="flex items-center gap-2 md:w-64 justify-end">
           <button
             type="button"
@@ -277,7 +423,7 @@ export const MiniPlayer: React.FC = () => {
                 ? 'border-accent/40 bg-accent/10 text-accent font-mono'
                 : 'border-hairline bg-surface-elevated text-text-secondary hover:text-text-primary'
             }`}
-            title="Set sleep timer (1-minute precision)"
+            title="Set sleep timer"
           >
             <Moon className="w-3.5 h-3.5" />
             {sleepTimerRemainingSec > 0 && (
@@ -317,7 +463,8 @@ export const MiniPlayer: React.FC = () => {
 
           <button
             onClick={toggleMute}
-            className="hidden md:block p-1.5 text-text-muted hover:text-text-primary transition-colors"
+            className="p-1.5 text-text-muted hover:text-text-primary transition-colors"
+            title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted || volume === 0 ? (
               <VolumeX className="w-4 h-4" />
@@ -332,10 +479,11 @@ export const MiniPlayer: React.FC = () => {
             step={0.01}
             value={isMuted ? 0 : volume}
             onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="hidden md:block w-20 h-1 bg-surface-elevated appearance-none cursor-pointer rounded"
+            className="w-20 h-1 bg-surface-elevated appearance-none cursor-pointer rounded"
           />
         </div>
       </div>
+
       <SleepTimerModal
         isOpen={showSleepTimerModal}
         onClose={() => setShowSleepTimerModal(false)}

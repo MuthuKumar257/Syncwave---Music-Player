@@ -60,6 +60,30 @@ router.get('/recommendations', optionalAuth, async (req: Request, res: Response)
 });
 
 /**
+ * GET /api/recommendations/discover
+ * Intelligent music discovery categories with exploratory language support
+ */
+router.get('/recommendations/discover', optionalAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = getUserId(req);
+    const languageOverride = req.query.language as string | undefined;
+
+    const discoverData = await RecommendationEngineService.getDiscoverFeed(userId, languageOverride);
+
+    res.json({
+      success: true,
+      data: discoverData
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve discover recommendations',
+      error: err.message
+    });
+  }
+});
+
+/**
  * GET /api/recommendations/mood/:moodId
  * Retrieve complete curated playable tracks for a specific mood playlist
  */
@@ -166,28 +190,50 @@ router.get('/recommendations/languages', optionalAuth, async (req: Request, res:
 
 /**
  * GET /api/recommendations/artists
- * Retrieve curated Music Directors and Singers with language weighting and search
+ * Retrieve canonical Music Directors and Singers with language filtering, duplicate removal, search and pagination
  */
-router.get('/recommendations/artists', (req: Request, res: Response): void => {
+router.get('/recommendations/artists', optionalAuth, (req: Request, res: Response): void => {
   try {
-    const role = req.query.role as 'DIRECTOR' | 'SINGER' | undefined;
+    const role = req.query.role as 'DIRECTOR' | 'SINGER' | 'ALL' | undefined;
     const languagesParam = req.query.languages as string | undefined;
-    const query = req.query.q as string | undefined;
+    const query = (req.query.q || req.query.query) as string | undefined;
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const includeAll = req.query.includeAll === 'true' || req.query.all === 'true';
 
-    const languages = languagesParam ? languagesParam.split(',').map((l) => l.trim()) : undefined;
+    let languages: string[] | undefined;
+    if (languagesParam && languagesParam.trim()) {
+      languages = languagesParam.split(',').map((l) => l.trim()).filter(Boolean);
+    } else if (!includeAll) {
+      // If no languages specified in query, read from authenticated user's profile if logged in
+      const userId = (req as AuthenticatedRequest).userId;
+      if (userId) {
+        const userPrefs = syncStore.getUserPreferences(userId);
+        if (userPrefs.preferredLanguages && userPrefs.preferredLanguages.length > 0) {
+          languages = userPrefs.preferredLanguages;
+        }
+      }
+    }
 
-    const artists = RecommendationEngineService.getArtistsCatalog({
+    const result = RecommendationEngineService.getPaginatedArtistsCatalog({
       role,
       languages,
       query,
-      limit
+      page,
+      limit,
+      includeAllLanguages: includeAll
     });
 
     res.json({
       success: true,
-      count: artists.length,
-      artists
+      count: result.artists.length,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages,
+      hasMore: result.hasMore,
+      selectedLanguages: result.selectedLanguages,
+      artists: result.artists
     });
   } catch (err: any) {
     res.status(500).json({

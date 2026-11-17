@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -17,6 +18,7 @@ import { Track } from '../../api/types';
 import { recommendationApi } from '../../api/recommendationApi';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { useDownloadStore } from '../../store/useDownloadStore';
 import { SongMenuButton } from '../../components/common/SongContextMenuModal';
 import { MiniPlayer } from '../../components/player/MiniPlayer';
@@ -67,9 +69,6 @@ export const SongDetailScreen: React.FC = () => {
       const fetched = await recommendationApi.getSongById(songId);
       if (fetched) {
         setTrack(fetched);
-        if (autoPlay) {
-          void playTrack(fetched);
-        }
       } else {
         setError('The requested song could not be found or is unavailable.');
       }
@@ -101,8 +100,32 @@ export const SongDetailScreen: React.FC = () => {
     }
   };
 
+  const { isAuthenticated } = useAuthStore();
+
   const handleToggleFavorite = async () => {
     if (!track) return;
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to Save Favorites',
+        'Save your favorite songs and access them across all your devices by signing in to SyncWave.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sign In',
+            onPress: async () => {
+              try {
+                await AsyncStorage.setItem('@syncwave_pending_fav_track', JSON.stringify(track));
+              } catch {}
+              try {
+                navigation.navigate('Login');
+              } catch {}
+            }
+          }
+        ]
+      );
+      return;
+    }
+
     const isNowFav = await toggleFavorite(track);
     Alert.alert(
       isNowFav ? 'Added to Favorites' : 'Removed from Favorites',

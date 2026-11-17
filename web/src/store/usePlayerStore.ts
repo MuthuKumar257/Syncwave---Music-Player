@@ -23,6 +23,9 @@ export interface AudioControlSignal {
 interface PlayerState {
   currentSong: Song | null;
   isPlaying: boolean;
+  autoplay: boolean;
+  playbackIntent: 'none' | 'play' | 'pause';
+  userPlayInitiated: boolean;
   currentTime: number;
   duration: number;
   volume: number;
@@ -76,6 +79,7 @@ interface PlayerState {
   clearQueue: () => void;
   fetchMoreRecommendations: () => Promise<void>;
   clearSessionHistory: () => void;
+  resetForGuest: () => void;
   syncExternalAudioState: (currentTime?: number, duration?: number, isPlaying?: boolean) => void;
   handleExternalAudioEnded: () => void;
   handleExternalAudioError: () => void;
@@ -688,6 +692,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         set({
           currentSong: { ...song, videoId: resolvedVideoId },
           isPlaying: true,
+          playbackIntent: 'play',
+          userPlayInitiated: true,
           currentTime: initialPositionSec,
           activeAudioVideoId: resolvedVideoId,
           isAudioStreamMode: true,
@@ -697,6 +703,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         set({
           currentSong: song,
           isPlaying: true,
+          playbackIntent: 'play',
+          userPlayInitiated: true,
           currentTime: initialPositionSec,
           activeAudioVideoId: null,
           isAudioStreamMode: false,
@@ -745,7 +753,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       flushListeningStats(currentSong, playTracking.unreportedDurationSec * 1000, false);
       playTracking.unreportedDurationSec = 0;
     }
-    set({ isPlaying: false });
+    set({
+      isPlaying: false,
+      playbackIntent: 'pause',
+      userPlayInitiated: false,
+    });
     publishLocalPlaybackState(get, true);
     persistPlaybackSession(get, true);
   };
@@ -755,7 +767,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const s = get();
     if (s.isAudioStreamMode && s.activeAudioVideoId) {
       emitAudioSignal('PLAY');
-      set({ isPlaying: true });
+      set({ isPlaying: true, playbackIntent: 'play', userPlayInitiated: true });
       publishLocalPlaybackState(get, true);
       persistPlaybackSession(get, true);
       return;
@@ -768,7 +780,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           executeLocalPlaySong(s.currentSong, false, s.currentTime, s.queueIndex);
         } else {
           webAudioPlayer.resume();
-          set({ isPlaying: true });
+          set({ isPlaying: true, playbackIntent: 'play', userPlayInitiated: true });
           publishLocalPlaybackState(get, true);
           persistPlaybackSession(get, true);
         }
@@ -1021,6 +1033,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   return {
     currentSong: null,
     isPlaying: false,
+    autoplay: false,
+    playbackIntent: 'none',
+    userPlayInitiated: false,
     currentTime: 0,
     duration: 0,
     volume: 0.85,
@@ -1085,6 +1100,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           repeatMode: sessionData.repeatMode || 'OFF',
           volume: typeof sessionData.volume === 'number' ? sessionData.volume : 0.85,
           isPlaying: false,
+          autoplay: false,
+          playbackIntent: 'none',
+          userPlayInitiated: false,
           activeAudioVideoId: sessionData.activeAudioVideoId || (restoredSong.videoId ? restoredSong.videoId : null),
           isAudioStreamMode: Boolean(sessionData.isAudioStreamMode || restoredSong.videoId),
         });
@@ -1537,6 +1555,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
 
       void fallbackToDirectAudio(song, false, get, set);
+    },
+
+    resetForGuest: () => {
+      try {
+        emitAudioSignal('PAUSE');
+        webAudioPlayer.pause();
+      } catch {}
+      try {
+        localStorage.removeItem('syncwave_playback_session');
+      } catch {}
+      set({
+        isPlaying: false,
+        autoplay: false,
+        playbackIntent: 'none',
+        userPlayInitiated: false,
+        currentSong: null,
+        queue: [],
+        queueIndex: 0,
+        currentTime: 0,
+        activeAudioVideoId: null,
+        isAudioStreamMode: false,
+      });
     },
   };
 });

@@ -61,14 +61,20 @@ export const recommendationApi = {
   },
 
   getArtistsCatalog: async (options?: {
-    role?: 'DIRECTOR' | 'SINGER';
+    role?: 'DIRECTOR' | 'SINGER' | 'ALL';
     languages?: string[];
     query?: string;
+    page?: number;
+    limit?: number;
+    includeAll?: boolean;
   }): Promise<ArtistItem[]> => {
     const params: Record<string, string> = {};
     if (options?.role) params.role = options.role;
     if (options?.languages && options.languages.length > 0) params.languages = options.languages.join(',');
     if (options?.query) params.q = options.query;
+    if (options?.page) params.page = String(options.page);
+    if (options?.limit) params.limit = String(options.limit);
+    if (options?.includeAll) params.includeAll = 'true';
 
     const res = await apiClient.get<{ success: boolean; artists: ArtistItem[] }>('/api/recommendations/artists', { params });
     return res.data.artists;
@@ -83,14 +89,20 @@ export const recommendationApi = {
 
   sendFeedback: async (
     targetId: string,
-    feedbackType: 'LIKE' | 'DISLIKE' | 'HIDE',
-    targetType: 'SONG' | 'SOUNDTRACK' | 'ARTIST' = 'SONG'
+    feedbackType: 'LIKE' | 'DISLIKE' | 'HIDE' | 'NOT_INTERESTED',
+    targetType: 'SONG' | 'SOUNDTRACK' | 'ARTIST' | 'COMPOSER' = 'SONG'
   ): Promise<void> => {
     await apiClient.post('/api/recommendations/feedback', {
       targetId,
       targetType,
       feedbackType
     });
+  },
+
+  getDiscoverFeed: async (languageOverride?: string): Promise<any> => {
+    const params = languageOverride && languageOverride !== 'ALL' ? { language: languageOverride } : {};
+    const res = await apiClient.get<{ success: boolean; data: any }>('/api/recommendations/discover', { params });
+    return res.data.data;
   },
 
   getProfileStats: async (): Promise<ProfileStats> => {

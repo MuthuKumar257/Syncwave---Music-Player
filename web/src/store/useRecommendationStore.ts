@@ -272,7 +272,9 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
       if (options?.role) params.set('role', options.role);
       if (options?.languages && options.languages.length > 0) params.set('languages', options.languages.join(','));
       if (options?.query) params.set('q', options.query);
-      const res = await fetch(`/api/recommendations/artists?${params.toString()}`);
+      const res = await fetch(`/api/recommendations/artists?${params.toString()}`, {
+        headers: getAuthHeaders()
+      });
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.artists) {

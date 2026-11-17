@@ -16,6 +16,9 @@ import {
 interface PlayerState {
   currentTrack: Track | null;
   isPlaying: boolean;
+  autoplay: boolean;
+  playbackIntent: 'none' | 'play' | 'pause';
+  userPlayInitiated: boolean;
   position: number;
   duration: number;
   playbackSpeed: number;
@@ -25,6 +28,9 @@ interface PlayerState {
   repeatMode: 'OFF' | 'ALL' | 'ONE';
   isMiniPlayerVisible: boolean;
   isQueueSheetVisible: boolean;
+  isSleepTimerModalVisible: boolean;
+  sleepTimerMinutes: number | null;
+  sleepTimerRemainingSec: number;
   sessionPlayedTrackIds: string[];
   isRestoringSession: boolean;
   isGeneratingQueue: boolean;
@@ -57,6 +63,9 @@ interface PlayerState {
   clearSessionHistory: () => void;
   fetchMoreRecommendations: () => Promise<void>;
   setQueueSheetVisible: (visible: boolean) => void;
+  setSleepTimerModalVisible: (visible: boolean) => void;
+  setSleepTimer: (minutes: number) => void;
+  clearSleepTimer: () => void;
   resetForGuest: () => Promise<void>;
 }
 
@@ -175,6 +184,9 @@ const persistMobilePlaybackSession = (get: () => PlayerState, immediate = false)
   lastMobileSessionPersistAt = now;
   void save();
 };
+
+let mobileSleepTimerIntervalId: any = null;
+let mobileSleepTimerEndsAt: number | null = null;
 
 let isFetchingAutoQueue = false;
 
@@ -314,6 +326,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       queue: targetQueue,
       queueIndex: index >= 0 ? index : 0,
       isPlaying: true,
+      playbackIntent: 'play',
+      userPlayInitiated: true,
       isMiniPlayerVisible: true,
       duration: Math.round(track.durationMs / 1000),
       position: startSec,
@@ -340,7 +354,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   const executeLocalTogglePlayPause = async () => {
     const s = get();
     const nextPlaying = !s.isPlaying;
-    set({ isPlaying: nextPlaying });
+    set({
+      isPlaying: nextPlaying,
+      playbackIntent: nextPlaying ? 'play' : 'pause',
+      userPlayInitiated: nextPlaying
+    });
     if (nextPlaying) {
       if (typeof audioManager.resume === 'function') {
         await audioManager.resume();
@@ -562,6 +580,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   return {
     currentTrack: null,
     isPlaying: false,
+    autoplay: false,
+    playbackIntent: 'none',
+    userPlayInitiated: false,
     position: 0,
     duration: 0,
     playbackSpeed: 1.0,
@@ -572,6 +593,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     repeatMode: 'OFF',
     isMiniPlayerVisible: false,
     isQueueSheetVisible: false,
+    isSleepTimerModalVisible: false,
+    sleepTimerMinutes: null,
+    sleepTimerRemainingSec: 0,
     isRestoringSession: false,
     isGeneratingQueue: false,
 
@@ -608,6 +632,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           isShuffle: Boolean(session.isShuffle),
           repeatMode: session.repeatMode || 'OFF',
           isPlaying: false,
+          autoplay: false,
+          playbackIntent: 'none',
+          userPlayInitiated: false,
           isMiniPlayerVisible: true,
         });
 
@@ -882,6 +909,49 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     setQueueSheetVisible: (visible: boolean) => set({ isQueueSheetVisible: visible }),
 
+    setSleepTimerModalVisible: (visible: boolean) => set({ isSleepTimerModalVisible: visible }),
+
+    clearSleepTimer: () => {
+      if (mobileSleepTimerIntervalId !== null) {
+        clearInterval(mobileSleepTimerIntervalId);
+        mobileSleepTimerIntervalId = null;
+      }
+      mobileSleepTimerEndsAt = null;
+      set({ sleepTimerMinutes: null, sleepTimerRemainingSec: 0 });
+    },
+
+    setSleepTimer: (minutes: number) => {
+      if (minutes <= 0) {
+        get().clearSleepTimer();
+        return;
+      }
+      if (mobileSleepTimerIntervalId !== null) {
+        clearInterval(mobileSleepTimerIntervalId);
+        mobileSleepTimerIntervalId = null;
+      }
+      const totalSec = minutes * 60;
+      mobileSleepTimerEndsAt = Date.now() + totalSec * 1000;
+      set({
+        sleepTimerMinutes: minutes,
+        sleepTimerRemainingSec: totalSec
+      });
+
+      mobileSleepTimerIntervalId = setInterval(() => {
+        if (mobileSleepTimerEndsAt === null) return;
+        const remainingSec = Math.max(0, Math.ceil((mobileSleepTimerEndsAt - Date.now()) / 1000));
+        if (remainingSec <= 0) {
+          get().clearSleepTimer();
+          // Pause playback gracefully when sleep timer expires
+          if (typeof audioManager.pause === 'function') {
+            void audioManager.pause();
+          }
+          set({ isPlaying: false });
+          return;
+        }
+        set({ sleepTimerRemainingSec: remainingSec });
+      }, 1000);
+    },
+
     playTrackAt: async (index: number) => {
       const { queue } = get();
       if (index < 0 || index >= queue.length) return;
@@ -979,6 +1049,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set({
         currentTrack: null,
         isPlaying: false,
+        autoplay: false,
+        playbackIntent: 'none',
+        userPlayInitiated: false,
         position: 0,
         duration: 0,
         queue: [],

@@ -21,6 +21,7 @@ import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { SearchIcon } from '../../components/common/Icon';
 
 export const SearchScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -45,7 +46,9 @@ export const SearchScreen: React.FC = () => {
       {/* Search Header */}
       <View style={styles.header}>
         <View style={styles.searchBarContainer}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <View style={{ marginRight: 8, justifyContent: 'center' }}>
+            <SearchIcon size={16} color={Colors.textTertiary} strokeWidth={1.5} />
+          </View>
           <TextInput
             style={styles.input}
             placeholder="Search by theme (e.g. love songs, melody), movie, artist..."

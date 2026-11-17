@@ -15,6 +15,14 @@ interface ActiveOtpChallenge {
 export const LoginView: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const getSuccessRedirect = () => {
+    const target =
+      searchParams.get('redirect') ||
+      sessionStorage.getItem('syncwave_redirect_target') ||
+      '/profile';
+    sessionStorage.removeItem('syncwave_redirect_target');
+    return target;
+  };
   const {
     user,
     isAuthenticated,
@@ -72,7 +80,7 @@ export const LoginView: React.FC = () => {
       const ok = await login(email.trim(), password);
       setSubmitting(false);
       if (ok) {
-        navigate('/profile');
+        navigate(getSuccessRedirect());
       } else {
         setError('Invalid email or password.');
       }
@@ -88,7 +96,7 @@ export const LoginView: React.FC = () => {
       if (res.code === 'OTP_SEND_FAILED' || res.code === 'OTP_DELIVERY_NOT_CONFIGURED') {
         const directOk = await login(email.trim(), password);
         if (directOk) {
-          navigate('/profile');
+          navigate(getSuccessRedirect());
           return;
         }
       }
@@ -107,7 +115,7 @@ export const LoginView: React.FC = () => {
       return;
     }
 
-    navigate('/profile');
+    navigate(getSuccessRedirect());
   };
 
   const handleRequestResetSubmit = async (e: React.FormEvent) => {
@@ -347,7 +355,7 @@ export const LoginView: React.FC = () => {
               onVerify={async (otp) => {
                 const res = await verifyOtp(challenge.challengeId, email.trim(), otp);
                 if (res.ok) {
-                  navigate('/profile');
+                  navigate(getSuccessRedirect());
                 }
                 return res;
               }}
@@ -362,7 +370,7 @@ export const LoginView: React.FC = () => {
             <>
               <GoogleAuthButton
                 label="Continue with Google"
-                onSuccess={() => navigate('/profile')}
+                onSuccess={() => navigate(getSuccessRedirect())}
                 onError={(msg) => {
                   setError(msg);
                   setErrorCode(null);

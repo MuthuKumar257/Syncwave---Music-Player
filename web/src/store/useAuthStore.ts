@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { UserProfile, UserSettings } from '../types';
 import { useRecommendationStore } from './useRecommendationStore';
 import { useAnalyticsStore } from './useAnalyticsStore';
+import { usePlayerStore } from './usePlayerStore';
 
 export interface AuthProvidersStatus {
   google: {
@@ -88,6 +89,7 @@ function safeParseStoredSettings(): UserSettings {
     offlineCacheLimitMb: 1024,
     autoScheduleEnabled: true
   };
+  if (typeof localStorage === 'undefined') return defaults;
   try {
     const raw = localStorage.getItem('syncwave_settings');
     if (!raw) return defaults;
@@ -120,8 +122,8 @@ function saveSession(set: any, data: { token: string; user: UserProfile; setting
 }
 
 export const useAuthStore = create<AuthState>((set, get) => {
-  const storedToken = localStorage.getItem('syncwave_token');
-  const storedUser = localStorage.getItem('syncwave_user');
+  const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+  const storedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_user') : null;
 
   return {
     user: safeParseStoredUser(storedUser),
@@ -356,6 +358,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       localStorage.removeItem('syncwave_user');
       set({ user: null, token: null, isAuthenticated: false });
       // Strictly clear client caches to maintain multi-user isolation
+      usePlayerStore.getState().resetForGuest();
       useRecommendationStore.getState().resetForLogout();
       useAnalyticsStore.getState().clearCache();
     },

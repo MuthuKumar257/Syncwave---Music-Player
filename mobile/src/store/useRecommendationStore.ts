@@ -39,6 +39,10 @@ interface RecommendationState {
   skipOnboarding: () => Promise<void>;
   resetPreferences: () => Promise<void>;
   resetForGuest: () => Promise<void>;
+  markNotInterested: (songId: string) => Promise<void>;
+  likeSong: (songId: string) => Promise<void>;
+  dislikeSong: (songId: string) => Promise<void>;
+  resetTasteProfile: () => Promise<void>;
 }
 
 export const useRecommendationStore = create<RecommendationState>((set, get) => ({
@@ -141,17 +145,25 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
     }
   },
 
-  setSelectedLanguages: (languages: string[]) => set({ selectedLanguages: languages }),
+  setSelectedLanguages: (languages: string[]) => {
+    set({ selectedLanguages: languages });
+    void get().fetchArtists(languages);
+  },
 
   toggleLanguage: (lang: string) => {
     const current = get().selectedLanguages;
+    let next: string[];
     if (current.includes(lang)) {
       if (current.length > 1) {
-        set({ selectedLanguages: current.filter((l) => l !== lang) });
+        next = current.filter((l) => l !== lang);
+      } else {
+        next = current;
       }
     } else {
-      set({ selectedLanguages: [...current, lang] });
+      next = [...current, lang];
     }
+    set({ selectedLanguages: next });
+    void get().fetchArtists(next);
   },
 
   toggleDirector: (name: string) => {
@@ -265,5 +277,91 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
       preferences: null,
       feed: null
     });
+  },
+
+  markNotInterested: async (songId: string) => {
+    try {
+      await recommendationApi.sendFeedback(songId, 'NOT_INTERESTED', 'SONG');
+      const currentFeed = get().feed;
+      if (currentFeed) {
+        const filterOut = (tracks?: any[]) => (tracks || []).filter((t: any) => t.id !== songId);
+        set({
+          feed: {
+            ...currentFeed,
+            madeForYou: filterOut(currentFeed.madeForYou),
+            recommendedForYou: filterOut(currentFeed.recommendedForYou),
+            trendingInLanguages: filterOut(currentFeed.trendingInLanguages),
+            newReleases: filterOut(currentFeed.newReleases),
+            discoverSomethingNew: filterOut(currentFeed.discoverSomethingNew),
+            discoverNewMusic: filterOut(currentFeed.discoverNewMusic),
+            songsYouMayLike: filterOut(currentFeed.songsYouMayLike),
+            similarToFavouriteSongs: filterOut(currentFeed.similarToFavouriteSongs),
+            similarSongs: filterOut(currentFeed.similarSongs)
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[useRecommendationStore] markNotInterested error:', e);
+    }
+  },
+
+  likeSong: async (songId: string) => {
+    try {
+      await recommendationApi.sendFeedback(songId, 'LIKE', 'SONG');
+    } catch (e) {
+      console.warn('[useRecommendationStore] likeSong error:', e);
+    }
+  },
+
+  dislikeSong: async (songId: string) => {
+    try {
+      await recommendationApi.sendFeedback(songId, 'DISLIKE', 'SONG');
+      const currentFeed = get().feed;
+      if (currentFeed) {
+        const filterOut = (tracks?: any[]) => (tracks || []).filter((t: any) => t.id !== songId);
+        set({
+          feed: {
+            ...currentFeed,
+            madeForYou: filterOut(currentFeed.madeForYou),
+            recommendedForYou: filterOut(currentFeed.recommendedForYou),
+            trendingInLanguages: filterOut(currentFeed.trendingInLanguages),
+            newReleases: filterOut(currentFeed.newReleases),
+            discoverSomethingNew: filterOut(currentFeed.discoverSomethingNew),
+            discoverNewMusic: filterOut(currentFeed.discoverNewMusic),
+            songsYouMayLike: filterOut(currentFeed.songsYouMayLike)
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[useRecommendationStore] dislikeSong error:', e);
+    }
+  },
+
+  resetTasteProfile: async () => {
+    try {
+      await recommendationApi.updateUserPreferences({
+        preferredLanguages: [],
+        favouriteComposers: [],
+        favouriteSingers: [],
+        favouriteArtists: [],
+        favouriteGenres: [],
+        preferredMoods: [],
+        hasCompletedOnboarding: false
+      });
+      await AsyncStorage.removeItem(ONBOARDING_KEY);
+      set({
+        hasCompletedOnboarding: false,
+        selectedLanguages: [],
+        selectedDirectors: [],
+        selectedSingers: [],
+        selectedGenres: [],
+        selectedMoods: [],
+        preferences: null,
+        feed: null
+      });
+      await get().fetchFeed();
+    } catch (e) {
+      console.warn('[useRecommendationStore] resetTasteProfile error:', e);
+    }
   }
 }));

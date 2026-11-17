@@ -11,12 +11,14 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { usePlaybackSessionStore } from '../../store/usePlaybackSessionStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { SongMenuButton } from '../../components/common/SongContextMenuModal';
 import { shareSong } from '../../utils/shareUtils';
 import { Colors } from '../../theme/colors';
@@ -59,10 +61,33 @@ export const FullPlayerScreen: React.FC = () => {
   const nextTrack = getNextTrack();
 
   const { isFavorite, toggleFavorite } = useLibraryStore();
+  const { isAuthenticated } = useAuthStore();
   const isCurrentFav = currentTrack ? isFavorite(currentTrack.id) : false;
 
   const handleToggleFavorite = async () => {
     if (!currentTrack) return;
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to Save Favorites',
+        'Save your favorite songs and access them across all your devices by signing in to SyncWave.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sign In',
+            onPress: async () => {
+              try {
+                await AsyncStorage.setItem('@syncwave_pending_fav_track', JSON.stringify(currentTrack));
+              } catch {}
+              try {
+                navigation.navigate('Login');
+              } catch {}
+            }
+          }
+        ]
+      );
+      return;
+    }
+
     const isNowFav = await toggleFavorite(currentTrack);
     Alert.alert(
       isNowFav ? 'Added to Favorites' : 'Removed from Favorites',

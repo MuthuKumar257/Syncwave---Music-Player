@@ -45,7 +45,7 @@ export const MusicPreferencesScreen: React.FC = () => {
 
   useEffect(() => {
     fetchArtists(selectedLanguages);
-  }, []);
+  }, [selectedLanguages]);
 
   // Filter by Tab and Search
   const displayedArtists = useMemo(() => {

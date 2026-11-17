@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { requireAuth, optionalAuth, AuthenticatedRequest } from '../middleware/auth';
 import { SupabaseHistoryService } from '../services/history/supabaseHistory.service';
+import { isSafePublicHttpsUrl } from '../services/download/fullAudioResolver.service';
 
 const router = Router();
 
@@ -46,6 +47,29 @@ router.post('/supabase-config', requireAuth, async (req: Request, res: Response)
   if (!result.success) {
     res.status(400).json({ success: false, errors: result.error.errors });
     return;
+  }
+
+  // Security Hardening: Block SSRF, loopback, private ranges & cloud metadata
+  if (!isSafePublicHttpsUrl(result.data.supabaseUrl)) {
+    res.status(400).json({
+      success: false,
+      message: 'Supabase URL must be a valid public HTTPS URL'
+    });
+    return;
+  }
+
+  // Security Hardening: Enforce Admin Authorization in Production
+  if (process.env.NODE_ENV === 'production') {
+    const adminKey = process.env.ADMIN_API_KEY;
+    const provided = (req.headers['x-admin-key'] as string) || (req.headers['authorization']?.replace('Bearer ', ''));
+    if (!adminKey || provided !== adminKey) {
+      res.status(403).json({
+        success: false,
+        code: 'FORBIDDEN',
+        message: 'Admin authorization required to reconfigure database connections in production.'
+      });
+      return;
+    }
   }
 
   const verification = await SupabaseHistoryService.configureAndVerify(

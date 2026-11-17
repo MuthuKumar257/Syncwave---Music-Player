@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
@@ -8,12 +9,19 @@ import { OtpMailerService } from '../services/auth/otpMailer.service';
 import { OtpChallengeService } from '../services/auth/otpChallenge.service';
 import { GoogleOAuthService } from '../services/auth/googleOAuth.service';
 import { WelcomeEmailService } from '../services/auth/welcomeEmail.service';
+import { TokenBlacklistService } from '../services/auth/tokenBlacklist.service';
 
 const router = Router();
 
+const strongPasswordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Za-z]/, 'Password must contain at least one letter')
+  .regex(/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/, 'Password must contain at least one number or symbol');
+
 const registerSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: strongPasswordSchema,
   displayName: z.string().min(1, 'Name is required').max(80).default('SyncWave User'),
   verifyWithOtp: z.boolean().optional()
 });
@@ -53,7 +61,11 @@ function serializeUser(user: User) {
 }
 
 function issueAuthToken(user: User): string {
-  return jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign(
+    { userId: user.id, email: user.email, jti: crypto.randomUUID() },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
 }
 
 function resolveAllowedFrontendOrigin(requestedOrigin?: string): string {
@@ -588,6 +600,16 @@ router.post('/refresh', (req: Request, res: Response): void => {
     return;
   }
 
+  // Security Hardening: Check if token has been explicitly revoked
+  if (TokenBlacklistService.isTokenRevoked(token)) {
+    res.status(401).json({
+      success: false,
+      code: 'TOKEN_REVOKED',
+      message: 'Authentication session has been revoked. Please sign in again.'
+    });
+    return;
+  }
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true }) as {
       userId?: string;
@@ -616,6 +638,9 @@ router.post('/refresh', (req: Request, res: Response): void => {
       return;
     }
 
+    // Security Hardening: Revoke old token to enforce token rotation and prevent replay
+    TokenBlacklistService.revokeToken(token, decoded.exp);
+
     const freshToken = issueAuthToken(user);
     const settings = syncStore.getUserSettings(user.id);
     res.json({
@@ -635,10 +660,24 @@ router.post('/refresh', (req: Request, res: Response): void => {
 
 /**
  * POST /api/auth/logout
- * Acknowledges client sign-out cleanly
+ * Securely invalidates active session and acknowledges client sign-out cleanly
  */
-router.post('/logout', (_req: Request, res: Response): void => {
-  res.json({ success: true, message: 'Signed out' });
+router.post('/logout', (req: Request, res: Response): void => {
+  const authHeader = req.headers.authorization;
+  const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1]?.trim() : undefined;
+  const bodyToken = typeof req.body?.token === 'string' ? req.body.token.trim() : undefined;
+  const token = headerToken || bodyToken;
+
+  if (token) {
+    try {
+      const decoded = jwt.decode(token) as { exp?: number } | null;
+      TokenBlacklistService.revokeToken(token, decoded?.exp);
+    } catch {
+      TokenBlacklistService.revokeToken(token);
+    }
+  }
+
+  res.json({ success: true, message: 'Signed out successfully and session revoked' });
 });
 
 /**
@@ -696,7 +735,7 @@ router.post('/password-reset/confirm', async (req: Request, res: Response): Prom
       email: z.string().email('Please enter a valid email address'),
       challengeId: z.string().uuid('Invalid challenge session'),
       otp: z.string().regex(/^\d{6}$/, 'Verification code must be 6 digits'),
-      newPassword: z.string().min(6, 'Password must be at least 6 characters')
+      newPassword: strongPasswordSchema
     })
     .safeParse(req.body);
 

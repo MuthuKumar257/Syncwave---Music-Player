@@ -199,10 +199,10 @@ describe('Music Player – Complete User Data Deletion and Fresh Start (Mobile)'
           favouriteSingers: [],
           favouriteGenres: [],
           favouriteMovies: [],
+          preferredMoods: [],
           personalizationEnabled: true,
           historyEnabled: true,
-          hasCompletedOnboarding: true,
-          updatedAt: new Date().toISOString()
+          hasCompletedOnboarding: true
         }
       });
       await AsyncStorage.setItem('@syncwave_onboarding_completed_v1', 'true');

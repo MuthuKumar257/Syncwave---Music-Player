@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, Disc3, Eye, EyeOff, Lock, Mail, ShieldAlert, User } from 'lucide-react';
 import { GoogleAuthButton } from '../components/auth/GoogleAuthButton';
 import { OtpVerificationStep } from '../components/auth/OtpVerificationStep';
@@ -14,6 +14,15 @@ interface ActiveOtpChallenge {
 
 export const SignUpView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const getSuccessRedirect = () => {
+    const target =
+      searchParams.get('redirect') ||
+      sessionStorage.getItem('syncwave_redirect_target') ||
+      '/profile';
+    sessionStorage.removeItem('syncwave_redirect_target');
+    return target;
+  };
   const { providers, fetchProviders, registerAccount, verifyOtp, resendOtp } = useAuthStore();
 
   const [displayName, setDisplayName] = useState('');
@@ -98,7 +107,7 @@ export const SignUpView: React.FC = () => {
       return;
     }
 
-    navigate('/profile');
+    navigate(getSuccessRedirect());
   };
 
   return (
@@ -129,7 +138,7 @@ export const SignUpView: React.FC = () => {
               onVerify={async (otp) => {
                 const res = await verifyOtp(challenge.challengeId, email.trim(), otp);
                 if (res.ok) {
-                  navigate('/profile');
+                  navigate(getSuccessRedirect());
                 }
                 return res;
               }}
@@ -144,7 +153,7 @@ export const SignUpView: React.FC = () => {
             <>
               <GoogleAuthButton
                 label="Sign up with Google"
-                onSuccess={() => navigate('/profile')}
+                onSuccess={() => navigate(getSuccessRedirect())}
                 onError={(msg) => {
                   setError(msg);
                   setErrorCode(null);

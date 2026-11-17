@@ -23,6 +23,7 @@ import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { SoundWaveIcon } from '../../components/common/Icon';
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -119,7 +120,7 @@ export const ProfileScreen: React.FC = () => {
             {/* 1. App Logo */}
             <View style={styles.guestLogoContainer}>
               <View style={styles.guestLogoCircle}>
-                <Text style={styles.guestLogoIcon}>🌊</Text>
+                <SoundWaveIcon size={22} color={Colors.accent} />
               </View>
               <Text style={styles.guestAppName}>SyncWave</Text>
             </View>

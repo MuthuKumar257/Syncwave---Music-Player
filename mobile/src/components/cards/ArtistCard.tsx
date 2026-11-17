@@ -38,8 +38,14 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({ artist, isSelected, onPr
         {artist.roleTitle || (artist.role === 'DIRECTOR' ? 'Music Director' : 'Playback Singer')}
       </Text>
 
+      {artist.languages && artist.languages.length > 0 ? (
+        <Text style={styles.languagesText} numberOfLines={1}>
+          {artist.languages.slice(0, 3).join(' • ')}
+        </Text>
+      ) : null}
+
       <Text style={styles.knownFor} numberOfLines={1}>
-        {artist.knownFor.slice(0, 2).join(', ')}
+        {artist.knownFor?.slice(0, 2).join(', ') || ''}
       </Text>
     </TouchableOpacity>
   );
@@ -100,6 +106,13 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontSize: 10,
     color: Colors.accent,
+    textAlign: 'center',
+    marginTop: 1
+  },
+  languagesText: {
+    ...Typography.caption,
+    fontSize: 9,
+    color: Colors.textSecondary,
     textAlign: 'center',
     marginTop: 1
   },

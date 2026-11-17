@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Heart, EyeOff } from 'lucide-react';
 import { UnifiedTrack } from '../../types';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -9,10 +10,17 @@ import { SongContextMenu } from '../common/SongContextMenu';
 interface RecommendationCardProps {
   track: UnifiedTrack;
   onPlayPreview?: (track: UnifiedTrack) => void;
+  onOpenDetails?: (track: UnifiedTrack) => void;
   fullWidth?: boolean;
 }
 
-export const RecommendationCard: React.FC<RecommendationCardProps> = ({ track, onPlayPreview, fullWidth = false }) => {
+export const RecommendationCard: React.FC<RecommendationCardProps> = ({
+  track,
+  onPlayPreview,
+  onOpenDetails,
+  fullWidth = false
+}) => {
+  const navigate = useNavigate();
   const { playSong } = usePlayerStore();
   const { sendFeedback, likedTrackIds, hiddenTrackIds } = useRecommendationStore();
 
@@ -20,6 +28,14 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({ track, o
   const isLiked = likedTrackIds.has(track.id);
 
   if (isHidden) return null;
+
+  const handleCardClick = () => {
+    if (onOpenDetails) {
+      onOpenDetails(track);
+    } else {
+      navigate(`/song/${encodeURIComponent(track.id)}`);
+    }
+  };
 
   const handlePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -54,31 +70,33 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({ track, o
 
   return (
     <div
-      onClick={handlePlay}
+      onClick={handleCardClick}
       className={`group relative ${
-        fullWidth ? 'w-full' : 'flex-shrink-0 w-44 md:w-48'
-      } bg-surface border border-hairline rounded-card p-3 hover:bg-surface-elevated transition-colors duration-150 cursor-pointer select-none`}
+        fullWidth ? 'w-full' : 'flex-shrink-0 w-36 sm:w-40 md:w-48'
+      } bg-surface border border-hairline rounded-card p-2 sm:p-2.5 md:p-3 hover:bg-surface-elevated transition-colors duration-150 cursor-pointer select-none`}
     >
       {/* Artwork Container (Nested Radius: 14 - 12 = 8px -> rounded-control) */}
-      <div className="relative aspect-square rounded-control overflow-hidden bg-surface-elevated mb-2.5">
+      <div className="relative aspect-square rounded-control overflow-hidden bg-surface-elevated mb-1.5 md:mb-2.5">
         <ArtworkImage
           src={track.artworkUrl}
           alt={track.title}
           className="w-full h-full object-cover"
         />
 
-        {/* Play Overlay Button */}
+        {/* Play Button: Explicitly starts playback */}
         <button
+          type="button"
           onClick={handlePlay}
-          className="absolute right-2 bottom-2 w-8 h-8 rounded-control bg-primary text-primary-dark shadow-subtle flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-          title="Play"
+          className="absolute right-1.5 bottom-1.5 md:right-2 md:bottom-2 w-7 h-7 md:w-8 md:h-8 rounded-control bg-accent text-black shadow-subtle flex items-center justify-center opacity-90 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-150 z-10 hover:scale-105 active:scale-95"
+          title={`Play ${track.title}`}
+          aria-label={`Play ${track.title}`}
         >
           <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
         </button>
 
         {/* Language Badge */}
         {track.language && (
-          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-[4px] bg-surface-deepest/90 text-[10px] font-mono text-text-muted border border-hairline">
+          <span className="absolute top-1 left-1 md:top-1.5 md:left-1.5 px-1 md:px-1.5 py-0.5 rounded-[4px] bg-surface-deepest/90 text-[9px] md:text-[10px] font-mono text-text-muted border border-hairline">
             {track.language}
           </span>
         )}
@@ -86,19 +104,19 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({ track, o
 
       {/* Metadata */}
       <div className="space-y-0.5">
-        <h4 className="text-sm font-medium text-text-primary truncate" title={track.title}>
+        <h4 className="text-xs sm:text-sm font-semibold text-text-primary truncate" title={track.title}>
           {track.title}
         </h4>
-        <p className="text-xs text-text-secondary truncate" title={track.singers?.length ? track.singers.join(', ') : track.artist}>
+        <p className="text-[11px] sm:text-xs text-text-secondary truncate" title={track.singers?.length ? track.singers.join(', ') : track.artist}>
           {track.singers && track.singers.length > 0 ? track.singers.join(', ') : track.artist}
         </p>
-        <p className="text-[11px] text-text-muted truncate" title={track.movieName || track.album || track.artist}>
+        <p className="text-[10px] sm:text-[11px] text-text-muted truncate" title={track.movieName || track.album || track.artist}>
           {track.movieName || track.album || track.artist}
         </p>
         {track.recommendationReason && (
           <div className="pt-0.5">
             <span
-              className="inline-block px-1.5 py-0.5 rounded-[4px] bg-accent/15 text-[9px] font-medium text-accent border border-accent/25 truncate max-w-full"
+              className="inline-block px-1 md:px-1.5 py-0.5 rounded-[4px] bg-accent/15 text-[8px] md:text-[9px] font-medium text-accent border border-accent/25 truncate max-w-full font-mono"
               title={track.recommendationReason}
             >
               {track.recommendationReason}
@@ -108,11 +126,11 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({ track, o
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-2 mt-1.5 border-t border-hairline text-text-muted text-xs">
-        <span className="font-mono text-[10px] truncate max-w-[90px] opacity-80">
+      <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-hairline text-text-muted text-xs">
+        <span className="font-mono text-[9px] md:text-[10px] truncate max-w-[70px] sm:max-w-[90px] opacity-80">
           {track.composer || track.artist}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           <button
             onClick={handleLike}
             className={`p-1 rounded-control hover:text-text-primary transition-colors ${
@@ -120,14 +138,14 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({ track, o
             }`}
             title="Like track"
           >
-            <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-accent' : ''}`} />
+            <Heart className={`w-3 h-3 md:w-3.5 md:h-3.5 ${isLiked ? 'fill-accent' : ''}`} />
           </button>
           <button
             onClick={handleHide}
             className="p-1 rounded-control hover:text-text-primary hover:bg-surface transition-colors"
             title="Hide from recommendations"
           >
-            <EyeOff className="w-3.5 h-3.5" />
+            <EyeOff className="w-3 h-3 md:w-3.5 md:h-3.5" />
           </button>
           <SongContextMenu song={track} buttonSize="sm" />
         </div>

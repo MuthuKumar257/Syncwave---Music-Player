@@ -88,14 +88,23 @@ export const YouTubeAudioEngine: React.FC = () => {
         player.unMute?.();
         player.setVolume?.(Math.round(volume * 100));
       }
+      const shouldPlay = usePlayerStore.getState().isPlaying;
       if (loadedVideoRef.current !== pending.videoId) {
         loadedVideoRef.current = pending.videoId;
-        player.loadVideoById?.({ videoId: pending.videoId, startSeconds: pending.startSec });
+        if (shouldPlay) {
+          player.loadVideoById?.({ videoId: pending.videoId, startSeconds: pending.startSec });
+        } else {
+          player.cueVideoById?.({ videoId: pending.videoId, startSeconds: pending.startSec });
+        }
       } else {
         if (pending.startSec > 0) {
           player.seekTo?.(pending.startSec, true);
         }
-        player.playVideo?.();
+        if (shouldPlay) {
+          player.playVideo?.();
+        } else {
+          player.pauseVideo?.();
+        }
       }
     } catch {
       // Ignore
@@ -216,15 +225,24 @@ export const YouTubeAudioEngine: React.FC = () => {
                   e.target.unMute?.();
                   e.target.setVolume?.(Math.round(volume * 100));
                 }
+                const shouldPlay = usePlayerStore.getState().isPlaying;
                 if (pending.videoId !== initialVideoId) {
                   loadedVideoRef.current = pending.videoId;
-                  e.target.loadVideoById?.({ videoId: pending.videoId, startSeconds: pending.startSec });
+                  if (shouldPlay) {
+                    e.target.loadVideoById?.({ videoId: pending.videoId, startSeconds: pending.startSec });
+                  } else {
+                    e.target.cueVideoById?.({ videoId: pending.videoId, startSeconds: pending.startSec });
+                  }
                 } else {
                   loadedVideoRef.current = pending.videoId;
                   if (pending.startSec > 0) {
                     e.target.seekTo?.(pending.startSec, true);
                   }
-                  e.target.playVideo?.();
+                  if (shouldPlay) {
+                    e.target.playVideo?.();
+                  } else {
+                    e.target.pauseVideo?.();
+                  }
                 }
                 clearProgressTimer();
                 progressTimerRef.current = window.setInterval(syncProgressNow, 500);
@@ -272,8 +290,9 @@ export const YouTubeAudioEngine: React.FC = () => {
         iframe.addEventListener('load', onFrameReady, { once: true });
         window.setTimeout(onFrameReady, 3500);
 
+        const shouldAutoplay = usePlayerStore.getState().isPlaying;
         const params = new URLSearchParams({
-          autoplay: '1',
+          autoplay: shouldAutoplay ? '1' : '0',
           controls: '0',
           disablekb: '1',
           fs: '0',

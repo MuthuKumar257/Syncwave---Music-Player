@@ -243,14 +243,15 @@ export const SchedulerView: React.FC = () => {
                 <button
                   onClick={() => toggleSchedule(schedule.id)}
                   className={`w-9 h-5 flex items-center rounded-full p-0.5 cursor-pointer transition-colors shrink-0 ${
-                    schedule.isEnabled ? 'bg-primary' : 'bg-surface-elevated border border-hairline'
+                    schedule.isEnabled ? 'bg-accent' : 'bg-surface-elevated border border-hairline'
                   }`}
                   title={schedule.isEnabled ? 'Disable routine' : 'Enable routine'}
+                  aria-label={schedule.isEnabled ? 'Disable routine' : 'Enable routine'}
                 >
                   <div
                     className={`w-4 h-4 rounded-full transition-transform ${
                       schedule.isEnabled
-                        ? 'translate-x-4 bg-primary-dark shadow-subtle'
+                        ? 'translate-x-4 bg-black shadow-subtle'
                         : 'translate-x-0 bg-text-muted'
                     }`}
                   />

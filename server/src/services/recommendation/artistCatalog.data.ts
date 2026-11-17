@@ -1,13 +1,18 @@
+import { CanonicalArtistService } from './canonicalArtist.service';
+
 export interface ArtistItem {
   id: string;
   name: string;
+  canonicalName?: string;
   category: 'ARTIST';
-  role: 'DIRECTOR' | 'SINGER';
+  role: 'DIRECTOR' | 'SINGER' | 'ALL';
   roleTitle: string;
   languages: string[];
   imageUrl: string;
   knownFor: string[];
   popularTracks: string[];
+  aliases?: string[];
+  description?: string;
 }
 
 export const ARTISTS_CATALOG: ArtistItem[] = [
@@ -458,40 +463,14 @@ export function queryArtistsCatalog(options?: {
   category?: 'ARTIST';
   query?: string;
   limit?: number;
+  includeAllLanguages?: boolean;
 }): ArtistItem[] {
-  let list = [...ARTISTS_CATALOG];
-
-  if (options?.role && options.role !== 'ALL') {
-    list = list.filter((a) => a.role === options.role);
-  }
-
-  if (options?.query && options.query.trim()) {
-    const q = options.query.toLowerCase().trim();
-    list = list.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.roleTitle.toLowerCase().includes(q) ||
-        a.knownFor.some((k) => k.toLowerCase().includes(q)) ||
-        a.popularTracks.some((t) => t.toLowerCase().includes(q)) ||
-        a.languages.some((l) => l.toLowerCase().includes(q))
-    );
-  }
-
-  // Prioritize selected languages: artists matching the selected languages come first
-  if (options?.languages && options.languages.length > 0) {
-    const langSet = new Set(options.languages.map((l) => l.toLowerCase()));
-    list.sort((a, b) => {
-      const aMatches = a.languages.some((l) => langSet.has(l.toLowerCase()));
-      const bMatches = b.languages.some((l) => langSet.has(l.toLowerCase()));
-      if (aMatches && !bMatches) return -1;
-      if (!aMatches && bMatches) return 1;
-      return 0;
-    });
-  }
-
-  if (options?.limit && options.limit > 0) {
-    list = list.slice(0, options.limit);
-  }
-
-  return list;
+  const result = CanonicalArtistService.getArtists({
+    languages: options?.languages,
+    role: options?.role,
+    query: options?.query,
+    limit: options?.limit || 100,
+    includeAllLanguages: options?.includeAllLanguages
+  });
+  return result.artists;
 }

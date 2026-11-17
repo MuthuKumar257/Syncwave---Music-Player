@@ -33,7 +33,9 @@ export const GoogleCallbackView: React.FC = () => {
 
     void completeGoogleTokenSession(token).then((ok) => {
       if (ok) {
-        navigate('/profile', { replace: true });
+        const target = sessionStorage.getItem('syncwave_redirect_target') || '/profile';
+        sessionStorage.removeItem('syncwave_redirect_target');
+        navigate(target, { replace: true });
       } else {
         setError('Could not validate Google session with SyncWave server.');
       }

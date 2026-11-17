@@ -5,13 +5,16 @@
 @layer base {
   :root {
     --color-bg: #141415;
+    --color-surface-deepest: #0f0f10;
     --color-surface: #19191b;
     --color-surface-elevated: #232325;
     --color-hairline: rgba(237, 237, 237, 0.08);
+    --color-hairline-strong: rgba(237, 237, 237, 0.14);
     --color-accent: #F59E0B;
     --color-text-primary: #ededed;
     --color-text-secondary: #a1a1a6;
     --color-text-muted: #85858b;
+    --ease-out-craft: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   body {
@@ -30,10 +33,21 @@
   }
 }
 
+/* Unslop Interaction & Transition Utilities */
+.transition-craft {
+  transition-property: color, background-color, border-color, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tap-press:active {
+  transform: scale(0.98);
+}
+
 /* Subtle Hairline Scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -41,7 +55,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(237, 237, 237, 0.12);
+  background: rgba(237, 237, 237, 0.1);
   border-radius: 4px;
 }
 
@@ -74,10 +88,10 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 50%;
   background: #ededed;
   margin-top: -3.5px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  transition: transform 0.12s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 input[type="range"]:hover::-webkit-slider-thumb {
-  transform: scale(1.2);
+  transform: scale(1.15);
 }

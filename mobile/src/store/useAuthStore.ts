@@ -92,6 +92,20 @@ const persistSession = async (token: string, user: MobileUserProfile) => {
   await useSchedulerStore.getState().switchUser(user.id);
   await useRecommendationStore.getState().initialize();
   void usePlaybackSessionStore.getState().startSessionSync(token);
+
+  // Process any pending favorite track preserved from guest action
+  try {
+    const pendingFavJson = await AsyncStorage.getItem('@syncwave_pending_fav_track');
+    if (pendingFavJson) {
+      await AsyncStorage.removeItem('@syncwave_pending_fav_track');
+      const pendingTrack = JSON.parse(pendingFavJson);
+      if (pendingTrack && (pendingTrack.id || pendingTrack._id)) {
+        await useLibraryStore.getState().toggleFavorite(pendingTrack);
+      }
+    }
+  } catch (err) {
+    console.warn('[useAuthStore] Failed to process pending favorite track:', err);
+  }
 };
 
 const clearSessionStorage = async () => {

@@ -26,12 +26,14 @@ export const linking: LinkingOptions<RootStackParamList> = {
       MainTabs: {
         screens: {
           HomeTab: 'home',
+          DiscoverTab: 'discover',
           SearchTab: {
             path: 'artist/:artistId'
           },
           LibraryTab: {
             path: 'playlist/:playlistId'
           },
+          SchedulerTab: 'scheduler',
           DownloadsTab: 'downloads',
           ProfileTab: 'profile'
         }

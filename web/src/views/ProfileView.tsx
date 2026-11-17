@@ -122,10 +122,10 @@ export const ProfileView: React.FC = () => {
         <div className="max-w-md w-full p-8 rounded-card bg-surface border border-hairline text-center space-y-6">
           {/* 1. App Logo */}
           <div className="flex flex-col items-center justify-center space-y-3">
-            <div className="w-16 h-16 rounded-2xl bg-surface-elevated border border-accent/40 flex items-center justify-center shadow-lg">
-              <Disc3 className="w-8 h-8 text-accent animate-pulse" />
+            <div className="w-14 h-14 rounded-panel bg-surface-elevated border border-hairline flex items-center justify-center shadow-subtle">
+              <Disc3 className="w-7 h-7 text-accent" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-text-primary">SyncWave</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-text-primary">SyncWave</h1>
           </div>
 
           {/* 2. Welcome Message */}

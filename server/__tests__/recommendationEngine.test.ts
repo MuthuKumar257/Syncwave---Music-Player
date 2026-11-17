@@ -8,6 +8,12 @@ describe('AI-Powered Recommendation & Language Discovery API Suite', () => {
 
   beforeEach(() => {
     syncStore.resetUserPreferences(testUserId);
+    syncStore.updateUserPreferences(testUserId, {
+      preferredLanguages: ['Tamil', 'Telugu', 'Hindi'],
+      favouriteArtists: ['Anirudh Ravichander', 'A. R. Rahman'],
+      favouriteComposers: ['Harris Jayaraj', 'A. R. Rahman'],
+      hasCompletedOnboarding: true
+    });
   });
 
   it('GET /api/users/me/preferences returns initial user music preferences', async () => {

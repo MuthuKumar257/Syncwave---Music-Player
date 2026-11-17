@@ -1,11 +1,17 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigation/types';
 import { Track } from '../../api/types';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { Responsive } from '../../utils/responsive';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { SongMenuButton, SongMenuContext } from '../common/SongContextMenuModal';
 
 interface TrackCardProps {
@@ -15,6 +21,7 @@ interface TrackCardProps {
   playlistId?: string;
   queueIndex?: number;
   onPress?: () => void;
+  onPlayPress?: () => void;
   onTrackDeleted?: (trackId: string) => void;
 }
 
@@ -25,10 +32,13 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   playlistId,
   queueIndex,
   onPress,
+  onPlayPress,
   onTrackDeleted
 }) => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentTrack, isPlaying, playTrack } = usePlayerStore();
   const { isFavorite, toggleFavorite } = useLibraryStore();
+  const { isAuthenticated } = useAuthStore();
   const isCurrent = currentTrack?.id === track.id;
   const isFav = isFavorite(track.id);
 
@@ -36,12 +46,47 @@ export const TrackCard: React.FC<TrackCardProps> = ({
     if (onPress) {
       onPress();
     } else {
+      try {
+        navigation.navigate('SongDetail', { songId: track.id, autoPlay: false });
+      } catch {
+        // Fallback if navigation context unavailable
+      }
+    }
+  };
+
+  const handlePlayPress = (e?: any) => {
+    e?.stopPropagation?.();
+    if (onPlayPress) {
+      onPlayPress();
+    } else {
       playTrack(track);
     }
   };
 
   const handleToggleHeart = async (e?: any) => {
     e?.stopPropagation?.();
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to Save Favorites',
+        'Save your favorite songs and access them across all your devices by signing in to SyncWave.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sign In',
+            onPress: async () => {
+              try {
+                await AsyncStorage.setItem('@syncwave_pending_fav_track', JSON.stringify(track));
+              } catch {}
+              try {
+                navigation.navigate('Login');
+              } catch {}
+            }
+          }
+        ]
+      );
+      return;
+    }
+
     const isNowFav = await toggleFavorite(track);
     Alert.alert(
       isNowFav ? 'Added to Favorites' : 'Removed from Favorites',
@@ -71,7 +116,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
             {track.title}
           </Text>
           <Text style={styles.rowSubtitle} numberOfLines={1}>
-            {track.composer || track.artist} {track.movieName ? `• ${track.movieName}` : ''}
+            {track.artist || 'Unknown Artist'}{track.composer ? ` • Dir: ${track.composer}` : ''}{track.movieName ? ` • ${track.movieName}` : ''}
           </Text>
           {track.recommendationReason ? (
             <Text style={styles.reasonText} numberOfLines={1}>
@@ -80,6 +125,14 @@ export const TrackCard: React.FC<TrackCardProps> = ({
           ) : null}
         </View>
         <View style={styles.rowRightArea}>
+          <TouchableOpacity
+            style={styles.rowPlayButton}
+            onPress={handlePlayPress}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={`Play ${track.title}`}
+          >
+            <Text style={styles.rowPlayIcon}>{isCurrent && isPlaying ? '❚❚' : '▶'}</Text>
+          </TouchableOpacity>
           <Text style={styles.durationText}>{durationStr}</Text>
           <TouchableOpacity
             style={styles.heartButton}
@@ -105,7 +158,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   }
 
   const isCompact = size === 'compact';
-  const width = isCompact ? 130 : 154;
+  const width = isCompact ? Math.round(Responsive.cardWidth * 0.88) : Responsive.cardWidth;
 
   return (
     <TouchableOpacity
@@ -118,6 +171,15 @@ export const TrackCard: React.FC<TrackCardProps> = ({
           source={{ uri: track.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500' }}
           style={styles.artwork}
         />
+        {/* Dedicated Play Button on artwork */}
+        <TouchableOpacity
+          style={styles.cardPlayButton}
+          onPress={handlePlayPress}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          accessibilityLabel={`Play ${track.title}`}
+        >
+          <Text style={styles.cardPlayIcon}>{isCurrent && isPlaying ? '❚❚' : '▶'}</Text>
+        </TouchableOpacity>
         {isCurrent && isPlaying ? (
           <View style={styles.playingBadge}>
             <Text style={styles.playingBadgeText}>PLAYING</Text>
@@ -131,6 +193,11 @@ export const TrackCard: React.FC<TrackCardProps> = ({
         <Text style={styles.cardArtist} numberOfLines={1}>
           {track.composer || track.artist}
         </Text>
+        {track.recommendationReason ? (
+          <Text style={styles.cardReason} numberOfLines={1}>
+            {track.recommendationReason}
+          </Text>
+        ) : null}
         <View style={styles.tagRow}>
           <Text style={styles.durationSmall}>{durationStr}</Text>
           <View style={styles.tagActions}>
@@ -165,8 +232,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.hairline,
     borderRadius: Radius.card,
-    padding: Spacing.sm,
-    marginRight: Spacing.md
+    padding: 7,
+    marginRight: 10
   },
   activeBorder: {
     borderColor: Colors.accent
@@ -184,29 +251,73 @@ const styles = StyleSheet.create({
   },
   playingBadge: {
     position: 'absolute',
-    top: Spacing.xs,
-    right: Spacing.xs,
+    top: 4,
+    right: 4,
     backgroundColor: Colors.accent,
     borderRadius: Radius.tag,
-    paddingHorizontal: 5,
-    paddingVertical: 2
+    paddingHorizontal: 4,
+    paddingVertical: 1
   },
   playingBadgeText: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: '700',
     color: '#000000'
   },
+  cardPlayButton: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 3
+  },
+  cardPlayIcon: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#000000',
+    marginLeft: 1
+  },
+  rowPlayButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6
+  },
+  rowPlayIcon: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#000000',
+    marginLeft: 1
+  },
   cardInfo: {
-    marginTop: Spacing.sm
+    marginTop: 6
   },
   cardTitle: {
-    ...Typography.bodyMedium,
+    fontSize: 12,
+    fontWeight: '600',
     color: Colors.textPrimary
   },
   cardArtist: {
-    ...Typography.caption,
+    fontSize: 11,
     color: Colors.textTertiary,
-    marginTop: 2
+    marginTop: 1
+  },
+  cardReason: {
+    fontSize: 9,
+    color: Colors.accent,
+    marginTop: 1,
+    fontFamily: 'monospace'
   },
   accentText: {
     color: Colors.accent

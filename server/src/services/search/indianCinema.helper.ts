@@ -89,6 +89,24 @@ export const KNOWN_INDIAN_MOVIES: Array<{
     trackTitles: ['Chinna Chinna Aasai', 'Pudhu Vellai Mazhai', 'Kaadhal Rojave', 'Rukkumani Rukkumani', 'Thamizha Thamizha']
   },
   {
+    movieName: 'Kadal',
+    aliases: ['kadal', 'கடல்'],
+    composer: 'A. R. Rahman',
+    year: 2013,
+    language: 'Tamil',
+    leadSingers: ['Sid Sriram', 'A. R. Rahman', 'Haricharan', 'Abhay Jodhpurkar', 'Shakthisree Gopalan'],
+    trackTitles: ['Adiye', 'Nenjukkulle', 'Elay Keechan', 'Moongil Thottam', 'Anbin Vasale']
+  },
+  {
+    movieName: 'Brahmastra',
+    aliases: ['brahmastra', 'brahmāstra', 'brahmastra part one shiva'],
+    composer: 'Pritam',
+    year: 2022,
+    language: 'Hindi',
+    leadSingers: ['Arijit Singh', 'Shreya Ghoshal', 'Badshah', 'Jonita Gandhi'],
+    trackTitles: ['Kesariya', 'Deva Deva', 'Dance Ka Bhoot', 'Rasiya', 'Fitoor']
+  },
+  {
     movieName: 'Ala Vaikunthapurramuloo',
     aliases: ['ala vaikunthapurramuloo', 'ala vaikuntapuramlo', 'avpl'],
     composer: 'Thaman S',
@@ -477,6 +495,17 @@ export const KNOWN_TRACK_VIDEO_MAP: Record<string, string> = {
   'Chahun Main Ya Naa': 'VdyBtGaspss',
   'Milne Hai Mujhse Aayi': 'GtPvCa3vvxA',
   'Hum Mar Jayenge': 'krJsyb_yf7A',
+
+  // Brahmastra
+  'Kesariya': 'BddP6PYo2gs',
+  'Deva Deva': 'mQHkWHPloNE',
+  'Dance Ka Bhoot': '1o32BfSgI7I',
+  'Rasiya': '3hV3Vq5tX2M',
+  'Fitoor': 'FwN5n9-F_j8',
+
+  // Kadal
+  'Adiye': 'gG1H7r0_y5s',
+  'Nenjukkulle': 'e8G805uH7bM',
 
   // Kumbalangi Nights
   'Cherathukal': 'kAP72G5R4H8',

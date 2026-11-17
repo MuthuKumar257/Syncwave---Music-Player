@@ -90,7 +90,11 @@ router.get('/:id', (req: Request, res: Response): void => {
   res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Song not found or unavailable' });
 });
 
-router.delete('/:id', (req: Request, res: Response): void => {
+router.delete('/:id', optionalAuth, (req: AuthenticatedRequest, res: Response): void => {
+  if (!req.userId) {
+    res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
   const songId = req.params.id;
   const deleted = syncStore.deleteSong(songId);
   res.json({

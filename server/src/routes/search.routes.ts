@@ -251,7 +251,7 @@ router.get('/platforms', (_req: Request, res: Response): void => {
     platforms: [
       {
         id: 'YOUTUBE',
-        name: 'YouTube Music & Videos',
+        name: 'SyncWave Music Streams',
         badgeColor: '#EF4444',
         supportsPlaylists: true,
         supportsVideos: true,
@@ -259,7 +259,7 @@ router.get('/platforms', (_req: Request, res: Response): void => {
       },
       {
         id: 'SPOTIFY',
-        name: 'Spotify Web Catalog',
+        name: 'SyncWave Catalog',
         badgeColor: '#22C55E',
         supportsPlaylists: true,
         supportsVideos: false,
@@ -267,7 +267,7 @@ router.get('/platforms', (_req: Request, res: Response): void => {
       },
       {
         id: 'APPLE_MUSIC',
-        name: 'Apple Music / iTunes',
+        name: 'SyncWave Preview Audio',
         badgeColor: '#FA2D48',
         supportsPlaylists: true,
         supportsVideos: false,

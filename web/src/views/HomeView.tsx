@@ -10,7 +10,8 @@ import {
   Sparkles,
   WifiOff,
   Loader2,
-  ArrowDown
+  ArrowDown,
+  MoreVertical
 } from 'lucide-react';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useRecommendationStore } from '../store/useRecommendationStore';
@@ -283,6 +284,10 @@ export const HomeView: React.FC = () => {
       ? feed.preferredLanguages.join(' • ')
       : 'Select Languages';
 
+  const featuredTrack = useMemo(() => {
+    return recommendedForYou[0] || trendingInLanguages[0] || popularSongs[0] || null;
+  }, [recommendedForYou, trendingInLanguages, popularSongs]);
+
   const hasAnyContent =
     recentlyPlayed.length > 0 ||
     recommendedForYou.length > 0 ||
@@ -307,7 +312,7 @@ export const HomeView: React.FC = () => {
       onPointerCancel={handlePointerUp}
       onWheel={handleWheel}
       data-testid="home-scroll-container"
-      className="flex-1 overflow-y-auto p-5 md:p-8 space-y-8 select-none relative"
+      className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-8 select-none relative pb-28 md:pb-8"
     >
       {/* Native Pull-to-Refresh Status Pill */}
       {(pullDistance > 8 || isRefreshing) && (
@@ -375,10 +380,10 @@ export const HomeView: React.FC = () => {
       <section data-section="personalized-greeting" className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1.5 max-w-2xl">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-elevated border border-hairline text-[11px] font-mono text-accent">
-            <Sparkles className="w-3 h-3" />
+            <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
             <span>{feed?.contextTitle || 'Personalised Radio'}</span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-semibold text-text-primary tracking-tight">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold text-text-primary tracking-tight">
             {feed?.greeting || 'Welcome back'}
           </h1>
           <p className="text-xs md:text-sm text-text-muted leading-relaxed">
@@ -390,13 +395,93 @@ export const HomeView: React.FC = () => {
         {recommendedForYou.length > 0 && (
           <button
             onClick={() => handlePlayTracksAt(recommendedForYou, 0)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-control bg-accent text-black text-xs font-semibold hover:brightness-110 transition-all shadow-subtle"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-control bg-accent text-black text-xs font-semibold hover:brightness-110 transition shadow-subtle tap-press"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             Play Recommended For You
           </button>
         )}
       </section>
+
+      {/* 2. FEATURED RECOMMENDATION (Editorial Hero Moment) */}
+      {featuredTrack && (
+        <section
+          data-section="featured-recommendation"
+          className="relative overflow-hidden rounded-panel bg-surface border border-hairline p-4 sm:p-5 md:p-6 transition-colors hover:border-hairline-strong select-none"
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 relative z-10">
+            {/* Real Artwork with Hover Play Trigger */}
+            <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-card overflow-hidden bg-surface-elevated shrink-0 border border-hairline shadow-subtle group">
+              <ArtworkImage
+                src={featuredTrack.artworkUrl}
+                alt={featuredTrack.title}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <button
+                type="button"
+                onClick={() => handlePlayTracksAt([featuredTrack], 0)}
+                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-accent"
+                title={`Play ${featuredTrack.title}`}
+                aria-label={`Play ${featuredTrack.title}`}
+              >
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-accent text-black flex items-center justify-center shadow-subtle">
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current ml-0.5" />
+                </div>
+              </button>
+            </div>
+
+            {/* Metadata & Actions */}
+            <div className="flex-1 min-w-0 space-y-2.5">
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-control bg-surface-elevated border border-hairline text-[11px] font-mono text-accent">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
+                <span>Featured Recommendation</span>
+                {featuredTrack.language && (
+                  <span className="text-text-muted">• {featuredTrack.language}</span>
+                )}
+              </div>
+
+              <div>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-text-primary tracking-tight truncate">
+                  {featuredTrack.title}
+                </h2>
+                <p className="text-xs sm:text-sm text-text-secondary truncate mt-0.5">
+                  {featuredTrack.singers && featuredTrack.singers.length > 0
+                    ? featuredTrack.singers.join(', ')
+                    : featuredTrack.artist}
+                  {featuredTrack.composer ? ` • Composer: ${featuredTrack.composer}` : ''}
+                  {featuredTrack.movieName ? ` • ${featuredTrack.movieName}` : ''}
+                </p>
+                <p className="text-[11px] sm:text-xs text-text-muted mt-1 line-clamp-2">
+                  {featuredTrack.recommendationReason ||
+                    `Personalized recommendation tailored to your taste profile and listening habits.`}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => handlePlayTracksAt([featuredTrack], 0)}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-control bg-accent text-black text-xs font-semibold hover:brightness-110 transition shadow-subtle tap-press"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Play Now</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    usePlayerStore.getState().addToQueue(toPlayerSong(featuredTrack));
+                  }}
+                  className="px-3 py-1.5 rounded-control bg-surface-elevated border border-hairline text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition tap-press"
+                >
+                  Add to Queue
+                </button>
+                <SongContextMenu song={toPlayerSong(featuredTrack)} buttonSize="sm" context="default" />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Initial Skeleton Loader */}
       {isLoading && !hasAnyContent ? (
@@ -446,6 +531,49 @@ export const HomeView: React.FC = () => {
                 })
               }
             />
+          )}
+
+          {/* 1.5. YOUR DAILY MIX */}
+          {feed?.dailyMixes && feed.dailyMixes.length > 0 && (
+            <section data-section="your-daily-mixes" className="space-y-3">
+              <SectionHeader
+                title="Your Daily Mix"
+                subtitle="Personalized daily rotations based on your taste and habits"
+              />
+              <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
+                {feed.dailyMixes.map((mix) => (
+                  <div
+                    key={mix.id}
+                    onClick={() => {
+                      if (mix.tracks && mix.tracks.length > 0) {
+                        handlePlayTracksAt(mix.tracks, 0);
+                      }
+                    }}
+                    className="w-44 shrink-0 p-3 rounded-card bg-surface hover:bg-surface-elevated border border-hairline/80 hover:border-accent/40 transition-all cursor-pointer group space-y-2.5"
+                  >
+                    <div className="relative aspect-square rounded-control overflow-hidden bg-surface-elevated">
+                      <ArtworkImage src={mix.coverUrl} alt={mix.title} />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-black shadow-lg">
+                          <Play className="w-5 h-5 fill-black ml-0.5" />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-text-primary group-hover:text-accent truncate">
+                        {mix.title}
+                      </h4>
+                      <p className="text-[11px] text-text-muted line-clamp-2 mt-0.5 leading-snug">
+                        {mix.subtitle}
+                      </p>
+                      <span className="text-[10px] font-mono text-accent block mt-1">
+                        {mix.tracks?.length || mix.trackCount} tracks
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {/* 2. BASED ON YOUR LISTENING HISTORY */}

@@ -7,7 +7,8 @@ import {
   StyleSheet,
   SafeAreaView,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,14 +16,57 @@ import { RootStackParamList } from '../../navigation/types';
 import { useRecommendationStore } from '../../store/useRecommendationStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { Track } from '../../api/types';
+import { Track, DailyMixItem } from '../../api/types';
 import { TrackCard } from '../../components/cards/TrackCard';
-import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
 
 const AVAILABLE_LANGUAGES = ['ALL', 'Tamil', 'Telugu', 'Hindi', 'Malayalam', 'Kannada', 'English'] as const;
+
+const DailyMixBlock: React.FC<{
+  mixes: DailyMixItem[];
+  onPlayMix: (mix: DailyMixItem) => void;
+}> = ({ mixes, onPlayMix }) => {
+  if (!mixes || mixes.length === 0) return null;
+
+  return (
+    <View style={styles.sectionContainer}>
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionHeaderTextCol}>
+          <Text style={styles.sectionTitle}>Your Daily Mix</Text>
+          <Text style={styles.sectionSubtitle}>Personalized daily rotations based on your taste and habits</Text>
+        </View>
+        <Text style={styles.countText}>{mixes.length} {mixes.length === 1 ? 'mix' : 'mixes'}</Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.horizontalScrollContent}
+      >
+        {mixes.map((mix) => (
+          <TouchableOpacity
+            key={mix.id}
+            style={styles.dailyMixCard}
+            onPress={() => onPlayMix(mix)}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={{ uri: mix.coverUrl }}
+              style={styles.dailyMixCover}
+              resizeMode="cover"
+            />
+            <View style={styles.dailyMixInfo}>
+              <Text style={styles.dailyMixTitle} numberOfLines={1}>{mix.title}</Text>
+              <Text style={styles.dailyMixSubtitle} numberOfLines={2}>{mix.subtitle}</Text>
+              <Text style={styles.dailyMixCount}>{mix.tracks?.length || mix.trackCount} tracks</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
 
 const SectionBlock: React.FC<{
   title: string;
@@ -31,6 +75,7 @@ const SectionBlock: React.FC<{
   onPlay: (track: Track, queue: Track[]) => void;
   horizontal?: boolean;
 }> = ({ title, subtitle, tracks, onPlay, horizontal = true }) => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   if (!tracks || tracks.length === 0) return null;
 
   return (
@@ -56,7 +101,8 @@ const SectionBlock: React.FC<{
               key={track.id}
               track={track}
               size="standard"
-              onPress={() => onPlay(track, tracks)}
+              onPress={() => navigation.navigate('SongDetail', { songId: track.id, autoPlay: false })}
+              onPlayPress={() => onPlay(track, tracks)}
             />
           ))}
         </ScrollView>
@@ -67,7 +113,8 @@ const SectionBlock: React.FC<{
               key={track.id}
               track={track}
               size="row"
-              onPress={() => onPlay(track, tracks)}
+              onPress={() => navigation.navigate('SongDetail', { songId: track.id, autoPlay: false })}
+              onPlayPress={() => onPlay(track, tracks)}
             />
           ))}
         </View>
@@ -104,32 +151,46 @@ export const HomeScreen: React.FC = () => {
   };
 
   // Personalized tracks (authenticated only)
-  const recommendedTracks = useMemo(() => feed?.recommendedForYou || [], [feed]);
-  const basedOnHistory = useMemo(() => feed?.basedOnListeningHistory?.tracks || [], [feed]);
-  const moreFromArtists = useMemo(() => feed?.moreFromFavouriteArtists || [], [feed]);
-  const sameDirector = useMemo(() => feed?.sameMusicDirector?.tracks || [], [feed]);
+  const madeForYou = useMemo(() => feed?.madeForYou || feed?.recommendedForYou || [], [feed]);
+  const dailyMixes = useMemo(() => feed?.dailyMixes || [], [feed]);
+  const becauseYouListenedTo = useMemo(() => feed?.becauseYouListenedTo?.tracks || feed?.basedOnListeningHistory?.tracks || [], [feed]);
+  const basedOnArtist = feed?.becauseYouListenedTo?.basedOn || feed?.basedOnListeningHistory?.basedOn || '';
+  const basedOnFavouriteArtists = useMemo(() => feed?.basedOnFavouriteArtists || feed?.moreFromFavouriteArtists || [], [feed]);
+  const basedOnFavouriteDirectors = useMemo(() => feed?.basedOnFavouriteDirectors || feed?.sameMusicDirector?.tracks || [], [feed]);
   const directorName = useMemo(() => feed?.sameMusicDirector?.director || 'Top Composer', [feed]);
   const recentlyPlayed = useMemo(() => feed?.recentlyPlayed || [], [feed]);
-
-  // Public / general tracks (available to everyone)
+  const favouriteSongs = useMemo(() => feed?.favouriteSongs || [], [feed]);
+  const similarToFavouriteSongs = useMemo(() => feed?.similarToFavouriteSongs || feed?.similarSongs || [], [feed]);
   const trending = useMemo(() => filterByLang(feed?.trendingInLanguages || []), [feed, selectedLanguageFilter]);
-  const discoverNew = useMemo(() => filterByLang(feed?.discoverNewMusic || []), [feed, selectedLanguageFilter]);
-  const similarSongs = useMemo(() => filterByLang(feed?.similarSongs || []), [feed, selectedLanguageFilter]);
+  const newReleases = useMemo(() => filterByLang(feed?.newReleases || []), [feed, selectedLanguageFilter]);
+  const discoverNew = useMemo(() => filterByLang(feed?.discoverSomethingNew || feed?.discoverNewMusic || []), [feed, selectedLanguageFilter]);
+  const continueListening = useMemo(() => feed?.continueListening || [], [feed]);
+  const songsYouMayLike = useMemo(() => feed?.songsYouMayLike || [], [feed]);
+
+  const recommendedTracks = madeForYou;
+  const similarSongs = similarToFavouriteSongs;
+
+  // Featured recommendation track
+  const featuredTrack = useMemo(() => {
+    return madeForYou[0] || trending[0] || null;
+  }, [madeForYou, trending]);
 
   // Combined public catalog
   const publicSongs = useMemo(() => {
     const map = new Map<string, Track>();
-    [...trending, ...discoverNew, ...similarSongs].forEach((t) => map.set(t.id, t));
+    [...trending, ...discoverNew, ...similarToFavouriteSongs].forEach((t) => map.set(t.id, t));
     return Array.from(map.values());
-  }, [trending, discoverNew, similarSongs]);
+  }, [trending, discoverNew, similarToFavouriteSongs]);
 
   const hasAnyContent = isAuthenticated
-    ? recommendedTracks.length > 0 ||
-      basedOnHistory.length > 0 ||
-      moreFromArtists.length > 0 ||
-      sameDirector.length > 0 ||
+    ? madeForYou.length > 0 ||
+      dailyMixes.length > 0 ||
+      becauseYouListenedTo.length > 0 ||
+      basedOnFavouriteArtists.length > 0 ||
+      basedOnFavouriteDirectors.length > 0 ||
       trending.length > 0 ||
       recentlyPlayed.length > 0 ||
+      favouriteSongs.length > 0 ||
       discoverNew.length > 0
     : publicSongs.length > 0;
 
@@ -263,48 +324,92 @@ export const HomeScreen: React.FC = () => {
              AUTHENTICATED USER PERSONALIZED EXPERIENCE
              ========================================= */
           <View style={styles.sectionsWrapper}>
-            {/* 1. Recommended for You */}
+            {/* Featured Recommendation Hero Banner */}
+            {featuredTrack ? (
+              <View style={styles.featuredHeroContainer}>
+                <View style={styles.featuredTagRow}>
+                  <View style={styles.accentDot} />
+                  <Text style={styles.featuredTagText}>FEATURED RECOMMENDATION</Text>
+                  {featuredTrack.language ? (
+                    <Text style={styles.featuredLangText}>• {featuredTrack.language}</Text>
+                  ) : null}
+                </View>
+                <View style={styles.featuredBodyRow}>
+                  <Image
+                    source={{
+                      uri:
+                        featuredTrack.artworkUrl ||
+                        'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'
+                    }}
+                    style={styles.featuredArtwork}
+                  />
+                  <View style={styles.featuredInfo}>
+                    <Text style={styles.featuredTitle} numberOfLines={1}>
+                      {featuredTrack.title}
+                    </Text>
+                    <Text style={styles.featuredArtist} numberOfLines={1}>
+                      {featuredTrack.composer || featuredTrack.artist}
+                    </Text>
+                    <Text style={styles.featuredReason} numberOfLines={2}>
+                      {featuredTrack.recommendationReason ||
+                        `Curated for your profile based on your interest in ${featuredTrack.composer || featuredTrack.artist || 'music'}`}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.featuredPlayBtn}
+                      onPress={() => playTrack(featuredTrack)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.featuredPlayBtnText}>▶ Play Now</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {/* 1. Made for You */}
             <SectionBlock
-              title="Recommended for You"
+              title="Made for You"
               subtitle="Personalized mix based on your taste and favorites"
-              tracks={recommendedTracks}
+              tracks={madeForYou}
               onPlay={playTrack}
               horizontal={false}
             />
 
-            {/* 2. Based on Your Listening History */}
+            {/* 2. Your Daily Mix */}
+            <DailyMixBlock
+              mixes={dailyMixes}
+              onPlayMix={(mix) => {
+                if (mix.tracks && mix.tracks.length > 0) {
+                  playTrack(mix.tracks[0], mix.tracks);
+                }
+              }}
+            />
+
+            {/* 3. Because You Listened To */}
             <SectionBlock
-              title="Based on Your Listening History"
+              title="Because You Listened To"
               subtitle={
-                feed?.basedOnListeningHistory?.basedOn
-                  ? `Inspired by ${feed.basedOnListeningHistory.basedOn}`
+                basedOnArtist
+                  ? `Inspired by ${basedOnArtist}`
                   : 'Tracks inspired by your past listening'
               }
-              tracks={basedOnHistory}
+              tracks={becauseYouListenedTo}
               onPlay={playTrack}
             />
 
-            {/* 3. More from Your Favourite Artists */}
+            {/* 4. Based on Your Favourite Artists */}
             <SectionBlock
-              title="More from Your Favourite Artists"
-              subtitle="Picks from your selected composers and singers"
-              tracks={moreFromArtists}
+              title="Based on Your Favourite Artists"
+              subtitle="Picks from your selected singers and vocalists"
+              tracks={basedOnFavouriteArtists}
               onPlay={playTrack}
             />
 
-            {/* 4. Same Music Director */}
+            {/* 5. Based on Your Favourite Music Directors */}
             <SectionBlock
-              title={`Same Music Director (${directorName})`}
+              title="Based on Your Favourite Music Directors"
               subtitle={`Compositions by ${directorName}`}
-              tracks={sameDirector}
-              onPlay={playTrack}
-            />
-
-            {/* 5. Trending in Your Language */}
-            <SectionBlock
-              title="Trending in Your Language"
-              subtitle="Popular tracks across your chosen languages"
-              tracks={trending}
+              tracks={basedOnFavouriteDirectors}
               onPlay={playTrack}
             />
 
@@ -316,11 +421,59 @@ export const HomeScreen: React.FC = () => {
               onPlay={playTrack}
             />
 
-            {/* 7. Discover New Music */}
+            {/* 7. Your Favourite Songs */}
             <SectionBlock
-              title="Discover New Music"
+              title="Your Favourite Songs"
+              subtitle="The tracks you love and rewatch most"
+              tracks={favouriteSongs}
+              onPlay={playTrack}
+            />
+
+            {/* 8. Similar to Your Favourite Songs */}
+            <SectionBlock
+              title="Similar to Your Favourite Songs"
+              subtitle="Fresh melodies closely matching your favourite tracks"
+              tracks={similarToFavouriteSongs}
+              onPlay={playTrack}
+            />
+
+            {/* 9. Trending in Your Languages */}
+            <SectionBlock
+              title="Trending in Your Languages"
+              subtitle="Popular hits across your chosen languages"
+              tracks={trending}
+              onPlay={playTrack}
+            />
+
+            {/* 10. New Releases */}
+            <SectionBlock
+              title="New Releases"
+              subtitle="Latest arrivals and soundtrack releases"
+              tracks={newReleases}
+              onPlay={playTrack}
+            />
+
+            {/* 11. Discover Something New */}
+            <SectionBlock
+              title="Discover Something New"
               subtitle="Fresh additions outside your frequent rotations"
               tracks={discoverNew}
+              onPlay={playTrack}
+            />
+
+            {/* 12. Continue Listening */}
+            <SectionBlock
+              title="Continue Listening"
+              subtitle="Pick up where you left off"
+              tracks={continueListening}
+              onPlay={playTrack}
+            />
+
+            {/* 13. Songs You May Like */}
+            <SectionBlock
+              title="Songs You May Like"
+              subtitle="Recommended songs tailored to your listening pattern"
+              tracks={songsYouMayLike}
               onPlay={playTrack}
             />
           </View>
@@ -368,9 +521,6 @@ export const HomeScreen: React.FC = () => {
 
         <View style={styles.footerSpacing} />
       </ScrollView>
-
-      {/* Persistent Mini Player */}
-      <MiniPlayer onPress={() => navigation.navigate('FullPlayer')} />
     </SafeAreaView>
   );
 };
@@ -384,22 +534,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.md
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
+    gap: Spacing.sm
   },
   headerTitleContainer: {
     flex: 1
   },
   title: {
-    ...Typography.h1,
+    ...Typography.h2,
+    fontSize: 22,
+    fontWeight: '700',
     color: Colors.textPrimary
   },
   headerSubtitle: {
     ...Typography.caption,
     color: Colors.textTertiary,
-    marginTop: 2
+    marginTop: 1
   },
   headerActions: {
     flexDirection: 'row',
@@ -429,9 +581,9 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   listContent: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.sm,
-    paddingBottom: 96
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: 110
   },
   emptyListContent: {
     flexGrow: 1,
@@ -442,16 +594,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.hairline,
     borderRadius: Radius.card,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg
-  },
-  guestBannerTextCol: {
+    padding: Spacing.md,
     marginBottom: Spacing.md
   },
+  guestBannerTextCol: {
+    marginBottom: Spacing.sm
+  },
   guestBannerTitle: {
-    ...Typography.h2,
+    ...Typography.h3,
+    fontSize: 16,
+    fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: 4
+    marginBottom: 2
   },
   guestBannerSubtitle: {
     ...Typography.caption,
@@ -527,10 +681,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm
   },
   sectionsWrapper: {
-    gap: Spacing.xl
+    gap: Spacing.md
   },
   sectionContainer: {
-    marginBottom: Spacing.md
+    marginBottom: Spacing.sm
   },
   sectionHeaderTextCol: {
     flex: 1,
@@ -538,22 +692,26 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     ...Typography.caption,
+    fontSize: 11,
     color: Colors.textTertiary,
-    marginTop: 2
+    marginTop: 1
   },
   horizontalScrollContent: {
     paddingRight: Spacing.md,
-    paddingTop: Spacing.xs
+    paddingTop: Spacing.xxs
   },
   verticalListContainer: {
     gap: 0
   },
   sectionTitle: {
-    ...Typography.h3,
+    ...Typography.bodyMedium,
+    fontSize: 16,
+    fontWeight: '700',
     color: Colors.textPrimary
   },
   countText: {
     ...Typography.monoSmall,
+    fontSize: 10,
     color: Colors.textTertiary
   },
   stateCard: {
@@ -589,7 +747,113 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: '500'
   },
+  dailyMixCard: {
+    width: 140,
+    marginRight: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.card,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.hairline
+  },
+  dailyMixCover: {
+    width: 140,
+    height: 140
+  },
+  dailyMixInfo: {
+    padding: Spacing.sm,
+    gap: 2
+  },
+  dailyMixTitle: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
+    color: Colors.textPrimary
+  },
+  dailyMixSubtitle: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: Colors.textTertiary,
+    lineHeight: 13
+  },
+  dailyMixCount: {
+    ...Typography.monoSmall,
+    fontSize: 9,
+    color: Colors.accent,
+    marginTop: 2
+  },
+  featuredHeroContainer: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
+    borderRadius: Radius.card,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg
+  },
+  featuredTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Spacing.sm
+  },
+  accentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.accent
+  },
+  featuredTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.accent,
+    letterSpacing: 0.5
+  },
+  featuredLangText: {
+    fontSize: 10,
+    color: Colors.textTertiary
+  },
+  featuredBodyRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    alignItems: 'center'
+  },
+  featuredArtwork: {
+    width: 84,
+    height: 84,
+    borderRadius: Radius.control,
+    backgroundColor: Colors.surfaceRaised
+  },
+  featuredInfo: {
+    flex: 1,
+    gap: 3
+  },
+  featuredTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary
+  },
+  featuredArtist: {
+    fontSize: 12,
+    color: Colors.textSecondary
+  },
+  featuredReason: {
+    fontSize: 10,
+    color: Colors.textTertiary,
+    lineHeight: 13
+  },
+  featuredPlayBtn: {
+    marginTop: 4,
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.control,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start'
+  },
+  featuredPlayBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#000000'
+  },
   footerSpacing: {
-    height: 60
+    height: 110
   }
 });

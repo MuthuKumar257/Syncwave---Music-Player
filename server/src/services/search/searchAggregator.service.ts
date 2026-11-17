@@ -285,7 +285,7 @@ export class SearchAggregatorService {
         sourceUrl: sp.externalUrl,
         previewUrl: sp.previewUrl,
         downloadAvailability: 'PREVIEW_ONLY',
-        downloadReason: 'Spotify web catalog only provides a 30-second preview; full-song download is not permitted.',
+        downloadReason: 'Online web catalog provides a 30-second preview; full-song download is not permitted.',
         versionType,
         isPlayableDirectly: !!sp.previewUrl,
         releaseYear: sp.releaseYear,
@@ -305,7 +305,7 @@ export class SearchAggregatorService {
         sourceUrl: yt.externalUrl,
         embedUrl: yt.embedUrl,
         downloadAvailability: 'STREAM_ONLY',
-        downloadReason: 'YouTube tracks play via official audio-stream mode only; full-song downloading is not permitted.',
+        downloadReason: 'Stream-mode tracks play via official audio-stream mode only; full-song downloading is not permitted.',
         versionType: yt.versionType,
         isPlayableDirectly: true, // Playable via official iframe embed modal
         language

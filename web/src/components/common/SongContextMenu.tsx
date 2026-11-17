@@ -13,7 +13,8 @@ import {
   Trash2,
   Check,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Ban
 } from 'lucide-react';
 import { Song, UnifiedTrack } from '../../types';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -253,6 +254,25 @@ export const SongContextMenu: React.FC<SongContextMenuProps> = ({
     }
   };
 
+  const handleNotInterested = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(false);
+    try {
+      await fetch('/api/recommendations/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetId: song.id,
+          targetType: 'SONG',
+          feedbackType: 'NOT_INTERESTED'
+        })
+      });
+      showToast("We'll recommend fewer songs like this");
+    } catch {
+      showToast('Feedback recorded');
+    }
+  };
+
   const handleRemoveOrDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsOpen(false);
@@ -411,6 +431,15 @@ export const SongContextMenu: React.FC<SongContextMenuProps> = ({
           >
             <Share2 className="w-4 h-4 text-white/80 group-hover:text-white shrink-0" />
             <span className="truncate">Share</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleNotInterested}
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-control text-xs text-text-primary hover:text-white hover:bg-white/10 transition-colors group"
+          >
+            <Ban className="w-4 h-4 text-white/80 group-hover:text-white shrink-0" />
+            <span className="truncate">Not Interested</span>
           </button>
 
           {/* Context-Aware Remove/Delete option */}

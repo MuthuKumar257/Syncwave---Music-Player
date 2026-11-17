@@ -232,13 +232,16 @@ export interface SearchSuggestion {
 export interface ArtistItem {
   id: string;
   name: string;
+  canonicalName?: string;
   category?: 'ARTIST';
-  role: 'DIRECTOR' | 'SINGER';
+  role: 'DIRECTOR' | 'SINGER' | 'ALL';
   roleTitle?: string;
   languages: string[];
   imageUrl: string;
   knownFor: string[];
   popularTracks: string[];
+  aliases?: string[];
+  description?: string;
 }
 
 export interface SongListeningStat {
@@ -327,9 +330,27 @@ export interface PersonalizedFeed {
   requiresLanguageSelection?: boolean;
   generatedAt?: string;
 
-  // Ordered Home Screen Sections:
+  // 15 Explicit Dynamic Home Sections:
+  madeForYou: UnifiedTrack[];
+  dailyMixes: DailyMixItem[];
+  becauseYouListenedTo: {
+    basedOn: string;
+    tracks: UnifiedTrack[];
+  };
+  basedOnFavouriteArtists?: UnifiedTrack[];
+  basedOnFavouriteDirectors?: UnifiedTrack[];
   recentlyPlayed: UnifiedTrack[];
+  favouriteSongs?: UnifiedTrack[];
+  similarToFavouriteSongs?: UnifiedTrack[];
+  trendingInLanguages: UnifiedTrack[];
+  newReleases: UnifiedTrack[];
+  discoverSomethingNew?: UnifiedTrack[];
+  yourMoodMix?: MoodPlaylistCard[];
   continueListening: UnifiedTrack[];
+  mostPlayedArtists?: ArtistRecommendationCard[];
+  songsYouMayLike?: UnifiedTrack[];
+
+  // Compatibility fields & aliases:
   recommendedForYou: UnifiedTrack[];
   basedOnListeningHistory: {
     basedOn: string;
@@ -354,28 +375,19 @@ export interface PersonalizedFeed {
     singer: string;
     tracks: UnifiedTrack[];
   }>;
-  trendingInLanguages: UnifiedTrack[];
-  newReleases: UnifiedTrack[];
   discoverNewMusic: UnifiedTrack[];
   movieSoundtracks: MovieSoundtrack[];
 
-  // Compatibility fields:
-  madeForYou: UnifiedTrack[];
   languageSections: Array<{
     language: string;
     recommended: UnifiedTrack[];
     trending: UnifiedTrack[];
     soundtracks: MovieSoundtrack[];
   }>;
-  becauseYouListenedTo: {
-    basedOn: string;
-    tracks: UnifiedTrack[];
-  };
   favouriteArtistPicks: Array<{
     artist: string;
     tracks: UnifiedTrack[];
   }>;
-  dailyMixes: DailyMixItem[];
   timeBasedPicks: {
     contextName: string;
     description: string;

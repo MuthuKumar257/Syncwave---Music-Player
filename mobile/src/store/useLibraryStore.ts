@@ -99,6 +99,78 @@ const DEFAULT_PLAYLISTS: MobilePlaylist[] = [
   }
 ];
 
+export const resolveTracksFromAnywhere = (
+  trackIds: string[],
+  get: () => MobileLibraryState
+): Track[] => {
+  if (!Array.isArray(trackIds) || trackIds.length === 0) return [];
+
+  const foundMap = new Map<string, Track>();
+
+  // 1. Check favoriteTracks in current library state
+  for (const t of get().favoriteTracks) {
+    if (t?.id) foundMap.set(t.id, t);
+  }
+
+  // 2. Check tracks in any existing playlists
+  for (const pl of get().playlists) {
+    if (Array.isArray(pl.tracks)) {
+      for (const t of pl.tracks) {
+        if (t?.id && !foundMap.has(t.id)) foundMap.set(t.id, t);
+      }
+    }
+  }
+
+  // 3. Check localTracks if available
+  try {
+    const { useLocalMusicStore } = require('./useLocalMusicStore');
+    const local = useLocalMusicStore.getState()?.localTracks || [];
+    for (const t of local) {
+      if (t?.id && !foundMap.has(t.id)) foundMap.set(t.id, t);
+    }
+  } catch {}
+
+  // 4. Check feed tracks in useRecommendationStore if available
+  try {
+    const { useRecommendationStore } = require('./useRecommendationStore');
+    const feed = useRecommendationStore.getState()?.feed;
+    if (feed) {
+      const candidates = [
+        ...(feed.recommendedForYou || []),
+        ...(feed.recentlyPlayed || []),
+        ...(feed.trendingInLanguages || []),
+        ...(feed.newReleases || []),
+        ...(feed.discoverNewMusic || [])
+      ];
+      for (const t of candidates) {
+        if (t?.id && !foundMap.has(t.id)) foundMap.set(t.id, t);
+      }
+    }
+  } catch {}
+
+  // 5. Build results preserving exact order of trackIds with safe fallback
+  return trackIds.map((id) => {
+    if (foundMap.has(id)) {
+      return foundMap.get(id)!;
+    }
+    const cleanTitle = id
+      .replace(/^(track_|song_|demo_|mob_track_)/, '')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+    return {
+      id,
+      title: cleanTitle || 'Song ' + id.substring(0, 8),
+      artist: 'SyncWave Artist',
+      durationMs: 210000,
+      artworkUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
+      sourcePlatform: 'LOCAL' as const,
+      sourceUrl: '',
+      isPlayableDirectly: false
+    };
+  });
+};
+
 export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
   favorites: [],
   favoriteTracks: [],
@@ -196,18 +268,22 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
   },
 
   toggleFavorite: async (track: Track): Promise<boolean> => {
+    if (!track || !track.id) return false;
+    const prevFavorites = [...get().favorites];
+    const prevFavoriteTracks = [...get().favoriteTracks];
     const isFav = get().isFavorite(track.id);
+
     let nextFavorites: string[];
     let nextFavoriteTracks: Track[];
 
     if (isFav) {
-      // Remove from favourites
-      nextFavorites = get().favorites.filter((id) => id !== track.id);
-      nextFavoriteTracks = get().favoriteTracks.filter((t) => t.id !== track.id);
+      // Optimistic remove
+      nextFavorites = prevFavorites.filter((id) => id !== track.id);
+      nextFavoriteTracks = prevFavoriteTracks.filter((t) => t.id !== track.id);
     } else {
-      // Prepend to favourites (newest favourited first, deduplicate)
-      nextFavorites = [track.id, ...get().favorites.filter((id) => id !== track.id)];
-      nextFavoriteTracks = [track, ...get().favoriteTracks.filter((t) => t.id !== track.id)];
+      // Optimistic prepend (newest favourited first, deduplicate)
+      nextFavorites = [track.id, ...prevFavorites.filter((id) => id !== track.id)];
+      nextFavoriteTracks = [track, ...prevFavoriteTracks.filter((t) => t.id !== track.id)];
     }
 
     set({ favorites: nextFavorites, favoriteTracks: nextFavoriteTracks });
@@ -226,13 +302,28 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
       );
     } catch {}
 
-    // Synchronize with server if logged in
-    try {
-      await apiClient.post(`/api/favorites/${encodeURIComponent(track.id)}`, {
-        track
-      });
-    } catch {
-      // Non-blocking offline support
+    // Synchronize with server if authenticated
+    if (targetUserId) {
+      try {
+        await apiClient.post(`/api/favorites/${encodeURIComponent(track.id)}`, {
+          track,
+          action: isFav ? 'REMOVE' : 'ADD'
+        });
+      } catch (err) {
+        // Rollback state if server operation failed
+        set({ favorites: prevFavorites, favoriteTracks: prevFavoriteTracks });
+        try {
+          await AsyncStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              favorites: prevFavorites,
+              favoriteTracks: prevFavoriteTracks,
+              playlists: get().playlists
+            })
+          );
+        } catch {}
+        throw err;
+      }
     }
 
     return !isFav;
@@ -256,7 +347,7 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
 
       if (res.data?.success && Array.isArray(res.data?.data)) {
         const cloudFavIds = res.data.data;
-        const localFavs = get().favorites;
+        const serverSongs = Array.isArray(res.data.songs) ? res.data.songs : [];
         const localTracksMap = new Map<string, Track>();
 
         // 1. Existing local favoriteTracks
@@ -265,10 +356,8 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
         }
 
         // 2. Server returned populated songs
-        if (Array.isArray(res.data.songs)) {
-          for (const s of res.data.songs) {
-            if (s?.id) localTracksMap.set(s.id, s);
-          }
+        for (const s of serverSongs) {
+          if (s?.id) localTracksMap.set(s.id, s);
         }
 
         // 3. Local music store tracks if available
@@ -280,49 +369,22 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
           }
         } catch {}
 
-        // Combine IDs preserving recent order
-        const mergedIds = Array.from(new Set([...localFavs, ...cloudFavIds]));
+        // Merge cloud favorites with local favorites (cloud takes priority in ordering)
+        const mergedFavIds = Array.from(new Set([...cloudFavIds, ...get().favorites]));
 
-        // Check for missing tracks
-        const missingIds = mergedIds.filter((id) => !localTracksMap.has(id));
+        // Resolve all merged favorite IDs into full Track objects
+        const resolvedTracks: Track[] = mergedFavIds
+          .map((id) => localTracksMap.get(id) || resolveTracksFromAnywhere([id], get)[0])
+          .filter(Boolean);
 
-        if (missingIds.length > 0) {
-          await Promise.allSettled(
-            missingIds.slice(0, 30).map(async (id) => {
-              try {
-                const songRes = await apiClient.get<{ success: boolean; data: Track }>(
-                  `/api/songs/${encodeURIComponent(id)}`
-                );
-                if (songRes.data?.success && songRes.data?.data) {
-                  localTracksMap.set(id, songRes.data.data);
-                }
-              } catch {}
-            })
-          );
-        }
-
-        // Build resolved tracks in exact mergedIds order
-        const resolvedTracks: Track[] = [];
-        for (const id of mergedIds) {
-          const track = localTracksMap.get(id);
-          if (track) {
-            resolvedTracks.push(track);
-          }
-        }
-
-        // Never clear existing favoriteTracks if network returned only IDs and tracks couldn't be fetched
-        const finalTracks =
-          resolvedTracks.length > 0 ? resolvedTracks : get().favoriteTracks;
-        const finalIds = mergedIds.length > 0 ? mergedIds : get().favorites;
-
-        set({ favorites: finalIds, favoriteTracks: finalTracks });
+        set({ favorites: mergedFavIds, favoriteTracks: resolvedTracks });
 
         const storageKey = getStorageKey(targetUserId);
         await AsyncStorage.setItem(
           storageKey,
           JSON.stringify({
-            favorites: finalIds,
-            favoriteTracks: finalTracks,
+            favorites: mergedFavIds,
+            favoriteTracks: resolvedTracks,
             playlists: get().playlists
           })
         );
@@ -336,17 +398,33 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     try {
       const res = await apiClient.get<{ success: boolean; data: any[] }>('/api/playlists');
       if (res.data.success && Array.isArray(res.data.data)) {
-        const serverPlaylists: MobilePlaylist[] = res.data.data.map((p) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description || '',
-          artworkUrl: p.artworkUrl,
-          userId: p.userId,
-          trackIds: Array.isArray(p.songIds) ? p.songIds : [],
-          tracks: Array.isArray(p.songs) ? p.songs : [],
-          createdAt: p.createdAt || new Date().toISOString(),
-          updatedAt: p.updatedAt || new Date().toISOString()
-        }));
+        const serverPlaylists: MobilePlaylist[] = res.data.data.map((p) => {
+          const existing = get().playlists.find((item) => item.id === p.id);
+          const serverSongs = Array.isArray(p.songs) ? p.songs : [];
+          const serverSongIds = Array.isArray(p.songIds)
+            ? p.songIds
+            : serverSongs.map((s: any) => s.id);
+
+          // Preserve existing hydrated tracks if server didn't supply them, or resolve from catalogue
+          const resolvedTracks: Track[] =
+            serverSongs.length > 0
+              ? serverSongs
+              : existing && existing.tracks.length > 0
+              ? existing.tracks
+              : resolveTracksFromAnywhere(serverSongIds, get);
+
+          return {
+            id: p.id,
+            name: p.name,
+            description: p.description || '',
+            artworkUrl: p.artworkUrl || (resolvedTracks[0]?.artworkUrl ? resolvedTracks[0].artworkUrl : undefined),
+            userId: p.userId,
+            trackIds: serverSongIds.length > 0 ? serverSongIds : resolvedTracks.map((t) => t.id),
+            tracks: resolvedTracks,
+            createdAt: p.createdAt || new Date().toISOString(),
+            updatedAt: p.updatedAt || new Date().toISOString()
+          };
+        });
 
         if (serverPlaylists.length > 0) {
           // Merge local and server playlists
@@ -356,7 +434,8 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
           const merged = [...serverPlaylists, ...localOnly];
           set({ playlists: merged });
 
-          const storageKey = getStorageKey(get().currentUserId);
+          const targetUserId = getEffectiveUserId(get().currentUserId);
+          const storageKey = getStorageKey(targetUserId);
           await AsyncStorage.setItem(
             storageKey,
             JSON.stringify({
@@ -393,10 +472,10 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
       id: newId,
       name: finalName,
       description,
-      artworkUrl: artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
+      artworkUrl: artworkUrl || (tracksToAdd[0]?.artworkUrl ? tracksToAdd[0].artworkUrl : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'),
       trackIds: tracksToAdd.map((t) => t.id),
       tracks: [...tracksToAdd],
-      userId: get().currentUserId || undefined,
+      userId: getEffectiveUserId(get().currentUserId) || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -404,7 +483,8 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     const nextPlaylists = [newPl, ...get().playlists];
     set({ playlists: nextPlaylists });
 
-    const storageKey = getStorageKey(get().currentUserId);
+    const targetUserId = getEffectiveUserId(get().currentUserId);
+    const storageKey = getStorageKey(targetUserId);
     try {
       await AsyncStorage.setItem(
         storageKey,
@@ -416,14 +496,29 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
       );
     } catch {}
 
-    // Cloud sync
+    // Cloud sync with server
     try {
-      await apiClient.post('/api/playlists', {
+      const res = await apiClient.post<{ success: boolean; data: any }>('/api/playlists', {
         name: finalName,
         description,
-        artworkUrl,
-        songIds: newPl.trackIds
+        artworkUrl: newPl.artworkUrl,
+        songIds: newPl.trackIds,
+        songs: newPl.tracks
       });
+      if (res.data.success && res.data.data?.id) {
+        const serverPl = res.data.data;
+        const replaced = get().playlists.map((p) =>
+          p.id === newPl.id
+            ? {
+                ...p,
+                id: serverPl.id,
+                userId: serverPl.userId || p.userId
+              }
+            : p
+        );
+        set({ playlists: replaced });
+        newPl.id = serverPl.id;
+      }
     } catch {}
 
     return newPl;
@@ -498,13 +593,15 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
       ...pl,
       trackIds: [...pl.trackIds, track.id],
       tracks: [...pl.tracks, track],
+      artworkUrl: pl.artworkUrl || track.artworkUrl,
       updatedAt: new Date().toISOString()
     };
 
     const nextPlaylists = get().playlists.map((p) => (p.id === playlistId ? updatedPl : p));
     set({ playlists: nextPlaylists });
 
-    const storageKey = getStorageKey(get().currentUserId);
+    const targetUserId = getEffectiveUserId(get().currentUserId);
+    const storageKey = getStorageKey(targetUserId);
     try {
       await AsyncStorage.setItem(
         storageKey,
@@ -518,7 +615,8 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
 
     try {
       await apiClient.post(`/api/playlists/${encodeURIComponent(playlistId)}/songs`, {
-        songId: track.id
+        songId: track.id,
+        song: track
       });
     } catch {}
 
@@ -540,13 +638,15 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
       ...pl,
       trackIds: updatedTrackIds,
       tracks: updatedTracks,
+      artworkUrl: pl.artworkUrl || newTracks[0]?.artworkUrl,
       updatedAt: new Date().toISOString()
     };
 
     const nextPlaylists = get().playlists.map((p) => (p.id === playlistId ? updatedPl : p));
     set({ playlists: nextPlaylists });
 
-    const storageKey = getStorageKey(get().currentUserId);
+    const targetUserId = getEffectiveUserId(get().currentUserId);
+    const storageKey = getStorageKey(targetUserId);
     try {
       await AsyncStorage.setItem(
         storageKey,
@@ -562,7 +662,8 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     try {
       for (const track of newTracks) {
         await apiClient.post(`/api/playlists/${encodeURIComponent(playlistId)}/songs`, {
-          songId: track.id
+          songId: track.id,
+          song: track
         }).catch(() => {});
       }
     } catch {}
@@ -584,7 +685,8 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     const nextPlaylists = get().playlists.map((p) => (p.id === playlistId ? updatedPl : p));
     set({ playlists: nextPlaylists });
 
-    const storageKey = getStorageKey(get().currentUserId);
+    const targetUserId = getEffectiveUserId(get().currentUserId);
+    const storageKey = getStorageKey(targetUserId);
     try {
       await AsyncStorage.setItem(
         storageKey,
@@ -626,7 +728,8 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     const nextPlaylists = get().playlists.map((p) => (p.id === playlistId ? updatedPl : p));
     set({ playlists: nextPlaylists });
 
-    const storageKey = getStorageKey(get().currentUserId);
+    const targetUserId = getEffectiveUserId(get().currentUserId);
+    const storageKey = getStorageKey(targetUserId);
     try {
       await AsyncStorage.setItem(
         storageKey,
@@ -639,8 +742,14 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
     } catch {}
 
     try {
-      await apiClient.put(`/api/playlists/${encodeURIComponent(playlistId)}`, {
-        songIds: nextTrackIds
+      await apiClient.put(`/api/playlists/${encodeURIComponent(playlistId)}/reorder`, {
+        songIds: nextTrackIds,
+        fromIndex,
+        toIndex
+      }).catch(async () => {
+        await apiClient.put(`/api/playlists/${encodeURIComponent(playlistId)}`, {
+          songIds: nextTrackIds
+        });
       });
     } catch {}
   },
@@ -651,29 +760,62 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
 
   fetchPlaylistDetails: async (playlistId: string): Promise<MobilePlaylist | null> => {
     const existing = get().playlists.find((p) => p.id === playlistId);
-    const userId = get().currentUserId;
+    const effectiveUserId = getEffectiveUserId(get().currentUserId);
 
-    if (!userId) return existing || null;
+    // If guest or no authenticated user, hydrate existing tracks from local catalogue
+    if (!effectiveUserId) {
+      if (existing) {
+        const hydratedTracks =
+          existing.tracks.length > 0
+            ? existing.tracks
+            : resolveTracksFromAnywhere(existing.trackIds, get);
+        const hydratedPl: MobilePlaylist = {
+          ...existing,
+          tracks: hydratedTracks
+        };
+        if (hydratedTracks.length !== existing.tracks.length) {
+          const nextPlaylists = get().playlists.map((item) =>
+            item.id === playlistId ? hydratedPl : item
+          );
+          set({ playlists: nextPlaylists });
+        }
+        return hydratedPl;
+      }
+      return null;
+    }
 
     try {
       const res = await apiClient.get<{ success: boolean; data: any }>(
         `/api/playlists/${encodeURIComponent(playlistId)}`
       );
-      if (res.data.success && res.data.data) {
+      if (
+        res.data?.success &&
+        res.data?.data &&
+        typeof res.data.data === 'object' &&
+        !Array.isArray(res.data.data) &&
+        res.data.data.id
+      ) {
         const p = res.data.data;
         const serverTracks: Track[] = Array.isArray(p.songs) ? p.songs : [];
         const serverSongIds: string[] = Array.isArray(p.songIds)
           ? p.songIds
           : serverTracks.map((t: Track) => t.id);
 
+        const resolvedTracks =
+          serverTracks.length > 0
+            ? serverTracks
+            : existing && existing.tracks.length > 0
+            ? existing.tracks
+            : resolveTracksFromAnywhere(serverSongIds, get);
+
         const updated: MobilePlaylist = {
           id: p.id,
           name: p.name || existing?.name || 'Untitled Playlist',
           description: p.description !== undefined ? p.description : existing?.description,
-          artworkUrl: p.artworkUrl || existing?.artworkUrl,
-          userId: p.userId || userId,
+          artworkUrl: p.artworkUrl || (resolvedTracks[0]?.artworkUrl ? resolvedTracks[0].artworkUrl : existing?.artworkUrl),
+          userId: p.userId || effectiveUserId,
           trackIds: serverSongIds.length > 0 ? serverSongIds : (existing?.trackIds || []),
-          tracks: serverTracks.length > 0 ? serverTracks : (existing?.tracks || []),
+          tracks: resolvedTracks,
           createdAt: p.createdAt || existing?.createdAt || new Date().toISOString(),
           updatedAt: p.updatedAt || new Date().toISOString()
         };
@@ -684,7 +826,7 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
 
         set({ playlists: nextPlaylists });
 
-        const storageKey = getStorageKey(userId);
+        const storageKey = getStorageKey(effectiveUserId);
         await AsyncStorage.setItem(
           storageKey,
           JSON.stringify({
@@ -695,9 +837,27 @@ export const useLibraryStore = create<MobileLibraryState>((set, get) => ({
         );
         return updated;
       }
-    } catch {
-      // Offline fallback: return existing playlist from memory/AsyncStorage
+    } catch (err) {
+      if (existing) {
+        const hydratedTracks =
+          existing.tracks.length > 0
+            ? existing.tracks
+            : resolveTracksFromAnywhere(existing.trackIds, get);
+        const hydratedPl: MobilePlaylist = { ...existing, tracks: hydratedTracks };
+        return hydratedPl;
+      }
+      throw err;
     }
+
+    if (existing) {
+      const hydratedTracks =
+        existing.tracks.length > 0
+          ? existing.tracks
+          : resolveTracksFromAnywhere(existing.trackIds, get);
+      const hydratedPl: MobilePlaylist = { ...existing, tracks: hydratedTracks };
+      return hydratedPl;
+    }
+    return null;
 
     return existing || null;
   },

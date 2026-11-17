@@ -223,7 +223,7 @@ export const LibraryView: React.FC = () => {
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-primary hover:bg-white text-primary-dark text-xs font-medium shadow-subtle transition-colors duration-150"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-surface-elevated hover:bg-surface-hover text-text-primary border border-hairline text-xs font-medium shadow-subtle transition duration-150 tap-press"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add audio files</span>

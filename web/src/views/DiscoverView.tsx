@@ -288,7 +288,7 @@ export const DiscoverView: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="px-3 py-1.5 rounded-control bg-primary hover:bg-white text-primary-dark text-xs font-medium shadow-subtle transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-control bg-accent hover:brightness-110 text-black text-xs font-semibold shadow-subtle transition flex items-center gap-1.5 tap-press"
             >
               {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>Search</span>}
             </button>

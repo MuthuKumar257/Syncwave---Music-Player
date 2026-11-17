@@ -75,6 +75,22 @@ vi.mock('react-native', () => ({
     OS: 'android',
     select: (options: Record<string, any>) => options.android || options.default
   },
+  Dimensions: {
+    get: vi.fn((_dim: string) => ({
+      width: 375,
+      height: 812,
+      scale: 3,
+      fontScale: 1
+    })),
+    set: vi.fn(),
+    addEventListener: vi.fn().mockReturnValue({ remove: vi.fn() })
+  },
+  PixelRatio: {
+    get: vi.fn(() => 2),
+    getFontScale: vi.fn(() => 1),
+    getPixelSizeForLayoutSize: vi.fn((size: number) => size * 2),
+    roundToNearestPixel: vi.fn((size: number) => Math.round(size))
+  },
   StyleSheet: {
     create: (styles: any) => styles
   },

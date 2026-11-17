@@ -57,6 +57,19 @@ const track4: Track = {
   language: 'Tamil'
 };
 
+const track5: Track = {
+  id: 'song_5',
+  title: 'Aalolam',
+  artist: 'Job Kurian',
+  composer: 'Sushin Shyam',
+  album: 'Lovefully Yours Veda',
+  durationMs: 236000,
+  sourcePlatform: 'YOUTUBE',
+  sourceUrl: 'https://youtube.com/watch?v=5',
+  isPlayableDirectly: true,
+  language: 'Malayalam'
+};
+
 describe('Playlist Details and Song Management Test Suite (Mobile)', () => {
   const TEST_USER = 'user_playlist_test_101';
 
@@ -334,6 +347,86 @@ describe('Playlist Details and Song Management Test Suite (Mobile)', () => {
       // User A's playlist is preserved and does not contain User B's playlist
       expect(useLibraryStore.getState().playlists).toHaveLength(1);
       expect(useLibraryStore.getState().playlists[0].name).toBe('User A Personal Mix');
+    });
+
+    it('Scenario: Complete 12-step lifecycle (create, add 5 songs, open, remove 1, reorder, app restart, 4 songs preserved, switch account privacy)', async () => {
+      const store = useLibraryStore.getState();
+
+      // 1. Create a new playlist
+      const playlist = await store.createPlaylist('Top Hits 2026', 'My favorite tracks collection');
+      expect(playlist.id).toBeDefined();
+      expect(playlist.name).toBe('Top Hits 2026');
+      expect(playlist.tracks).toHaveLength(0);
+
+      // 2. Add five actual songs
+      const addedCount = await store.addTracksToPlaylist(playlist.id, [
+        track1,
+        track2,
+        track3,
+        track4,
+        track5
+      ]);
+      expect(addedCount).toBe(5);
+
+      // 3 & 4. Open the playlist and verify all five songs appear
+      const openedPlaylist = await store.fetchPlaylistDetails(playlist.id);
+      expect(openedPlaylist).not.toBeNull();
+      expect(openedPlaylist!.tracks).toHaveLength(5);
+      expect(openedPlaylist!.tracks.map((t) => t.id)).toEqual([
+        'song_1',
+        'song_2',
+        'song_3',
+        'song_4',
+        'song_5'
+      ]);
+
+      // 5 & 6. Remove one song (e.g. track3) and verify four songs remain
+      await store.removeTrackFromPlaylist(playlist.id, 'song_3');
+      const plAfterRemove = store.getPlaylistById(playlist.id)!;
+      expect(plAfterRemove.tracks).toHaveLength(4);
+      expect(plAfterRemove.tracks.map((t) => t.id)).toEqual([
+        'song_1',
+        'song_2',
+        'song_4',
+        'song_5'
+      ]);
+
+      // 7. Reorder songs (move first song to index 2: song_2, song_4, song_1, song_5)
+      await store.reorderPlaylistTracks(playlist.id, 0, 2);
+      const plAfterReorder = store.getPlaylistById(playlist.id)!;
+      expect(plAfterReorder.tracks.map((t) => t.id)).toEqual([
+        'song_2',
+        'song_4',
+        'song_1',
+        'song_5'
+      ]);
+
+      // 8 & 9. Restart the app (wipe in-memory state, re-initialize from storage)
+      useLibraryStore.setState({
+        playlists: [],
+        currentUserId: null,
+        isInitialized: false
+      });
+      await useLibraryStore.getState().initialize(TEST_USER);
+
+      // 10. Open the playlist again: verify the correct four songs and exact order are preserved
+      const plAfterRestart = await useLibraryStore.getState().fetchPlaylistDetails(playlist.id);
+      expect(plAfterRestart).not.toBeNull();
+      expect(plAfterRestart!.tracks).toHaveLength(4);
+      expect(plAfterRestart!.tracks.map((t) => t.id)).toEqual([
+        'song_2',
+        'song_4',
+        'song_1',
+        'song_5'
+      ]);
+
+      // 11 & 12. Switch accounts and verify playlist privacy
+      const ANOTHER_USER = 'user_playlist_another_account_303';
+      await useLibraryStore.getState().switchUser(ANOTHER_USER);
+
+      // Another user has 0 playlists from TEST_USER
+      expect(useLibraryStore.getState().playlists.some((p) => p.id === playlist.id)).toBe(false);
+      expect(useLibraryStore.getState().getPlaylistById(playlist.id)).toBeUndefined();
     });
   });
 });

@@ -43,8 +43,9 @@ export const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
 
         <button
           onClick={handlePlay}
-          className="absolute right-2 bottom-2 w-8 h-8 rounded-control bg-primary text-primary-dark shadow-subtle flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-          title="Play mix"
+          className="absolute right-2 bottom-2 w-8 h-8 rounded-control bg-accent text-black shadow-subtle flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:scale-105 active:scale-95"
+          title={`Play ${mix.title}`}
+          aria-label={`Play ${mix.title}`}
         >
           <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
         </button>

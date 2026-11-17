@@ -64,9 +64,9 @@ router.get('/discover', (_req: Request, res: Response): void => {
   res.json({
     success: true,
     platforms: [
-      { id: 'spotify', name: 'Spotify', status: 'Available' },
-      { id: 'youtube', name: 'YouTube Music', status: 'Available' },
-      { id: 'applemusic', name: 'Apple Music', status: 'Available' }
+      { id: 'spotify', name: 'SyncWave', status: 'Available' },
+      { id: 'youtube', name: 'Music', status: 'Available' },
+      { id: 'applemusic', name: 'Audio Preview', status: 'Available' }
     ],
     featured: [
       { id: 'feat_1', title: 'Deep Focus Chill Beats', source: 'SPOTIFY' },

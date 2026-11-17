@@ -34,6 +34,7 @@ export interface PlaylistData {
   id: string;
   userId: string;
   name: string;
+  description?: string;
   artworkUrl?: string;
   isFavorite: boolean;
   songIds: string[];
@@ -162,8 +163,8 @@ export interface RecommendationFeedbackRecord {
   id: number;
   userId: string;
   targetId: string;
-  targetType: 'SONG' | 'SOUNDTRACK' | 'ARTIST';
-  feedbackType: 'LIKE' | 'DISLIKE' | 'HIDE';
+  targetType: 'SONG' | 'SOUNDTRACK' | 'ARTIST' | 'COMPOSER';
+  feedbackType: 'LIKE' | 'DISLIKE' | 'HIDE' | 'NOT_INTERESTED';
   timestamp: string;
 }
 
@@ -309,8 +310,8 @@ class InMemorySyncStore {
         album: 'Daily Routines Vol. 1',
         durationMs: 240000,
         artworkUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=60',
-        source: 'SPOTIFY',
-        externalUrl: 'https://open.spotify.com',
+        source: 'LOCAL',
+        externalUrl: 'https://syncwave.app',
         createdAt: new Date().toISOString()
       },
       {
@@ -320,8 +321,8 @@ class InMemorySyncStore {
         album: 'Power Routines',
         durationMs: 215000,
         artworkUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&auto=format&fit=crop&q=60',
-        source: 'YOUTUBE',
-        externalUrl: 'https://music.youtube.com',
+        source: 'LOCAL',
+        externalUrl: 'https://syncwave.app',
         createdAt: new Date().toISOString()
       },
       {
@@ -576,18 +577,33 @@ class InMemorySyncStore {
     return this.playlists.get(id);
   }
 
-  createPlaylist(userId: string, name: string, artworkUrl?: string): PlaylistData {
+  createPlaylist(
+    userId: string,
+    name: string,
+    artworkUrl?: string,
+    description?: string,
+    initialSongIds?: string[]
+  ): PlaylistData {
     const playlist: PlaylistData = {
       id: crypto.randomUUID(),
       userId,
       name,
+      description: description || '',
       artworkUrl,
       isFavorite: false,
-      songIds: [],
+      songIds: initialSongIds ? [...initialSongIds] : [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
     this.playlists.set(playlist.id, playlist);
+    return playlist;
+  }
+
+  reorderPlaylistSongs(playlistId: string, songIds: string[]): PlaylistData | undefined {
+    const playlist = this.playlists.get(playlistId);
+    if (!playlist) return undefined;
+    playlist.songIds = [...songIds];
+    playlist.updatedAt = new Date().toISOString();
     return playlist;
   }
 
@@ -677,6 +693,25 @@ class InMemorySyncStore {
       set.add(targetId);
       this.persistToDisk();
       return true;
+    }
+  }
+
+  addFavorite(userId: string, targetId: string): void {
+    let set = this.favorites.get(userId);
+    if (!set) {
+      set = new Set();
+      this.favorites.set(userId, set);
+    }
+    set.delete(targetId);
+    set.add(targetId);
+    this.persistToDisk();
+  }
+
+  removeFavorite(userId: string, targetId: string): void {
+    const set = this.favorites.get(userId);
+    if (set && set.has(targetId)) {
+      set.delete(targetId);
+      this.persistToDisk();
     }
   }
 
@@ -778,17 +813,16 @@ class InMemorySyncStore {
   getUserPreferences(userId: string): UserMusicPreference {
     let pref = this.userPreferences.get(userId);
     if (!pref) {
-      const isGuestOrTest = userId === 'guest_default_user' || userId.startsWith('test_rec_');
       pref = {
         userId,
-        preferredLanguages: isGuestOrTest ? ['Tamil', 'Telugu', 'Hindi'] : [],
-        favouriteArtists: isGuestOrTest ? ['A. R. Rahman', 'Anirudh Ravichander', 'Harris Jayaraj', 'Sid Sriram'] : [],
-        favouriteGenres: isGuestOrTest ? ['Soundtrack', 'Melody', 'Film Score', 'Pop'] : [],
-        favouriteComposers: isGuestOrTest ? ['A. R. Rahman', 'Harris Jayaraj', 'Anirudh Ravichander'] : [],
-        favouriteSingers: isGuestOrTest ? ['Sid Sriram', 'S. P. Balasubrahmanyam', 'K. S. Chithra', 'Shreya Ghoshal', 'Arijit Singh'] : [],
-        favouriteMovies: isGuestOrTest ? ['Vaaranam Aayiram', 'Leo', 'Roja'] : [],
-        preferredMoods: isGuestOrTest ? ['Happy', 'Romantic', 'Relaxing'] : [],
-        hasCompletedOnboarding: isGuestOrTest,
+        preferredLanguages: [],
+        favouriteArtists: [],
+        favouriteGenres: [],
+        favouriteComposers: [],
+        favouriteSingers: [],
+        favouriteMovies: [],
+        preferredMoods: [],
+        hasCompletedOnboarding: false,
         personalizationEnabled: true,
         historyEnabled: true,
         updatedAt: new Date().toISOString()
@@ -822,17 +856,16 @@ class InMemorySyncStore {
   }
 
   resetUserPreferences(userId: string): UserMusicPreference {
-    const isGuestOrTest = userId === 'guest_default_user' || userId.startsWith('test_rec_');
     const resetPref: UserMusicPreference = {
       userId,
-      preferredLanguages: isGuestOrTest ? ['Tamil'] : [],
+      preferredLanguages: [],
       favouriteArtists: [],
       favouriteGenres: [],
       favouriteComposers: [],
       favouriteSingers: [],
       favouriteMovies: [],
       preferredMoods: [],
-      hasCompletedOnboarding: isGuestOrTest,
+      hasCompletedOnboarding: false,
       personalizationEnabled: true,
       historyEnabled: true,
       updatedAt: new Date().toISOString()
@@ -866,8 +899,8 @@ class InMemorySyncStore {
         movieOrAlbum: statUpdate.movieOrAlbum || '',
         musicDirector: statUpdate.musicDirector || '',
         singers: statUpdate.singers || [],
-        language: statUpdate.language || 'Tamil',
-        genre: statUpdate.genre || 'Soundtrack',
+        language: statUpdate.language || '',
+        genre: statUpdate.genre || '',
         playCount: 0,
         replayCount: 0,
         totalListeningDurationMs: 0,

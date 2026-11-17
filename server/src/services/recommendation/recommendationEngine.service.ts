@@ -16,6 +16,7 @@ import {
 import { SupabaseHistoryService } from '../history/supabaseHistory.service';
 import { UnifiedTrack, MovieSoundtrack } from '../search/searchAggregator.service';
 import { ARTISTS_CATALOG, queryArtistsCatalog, ArtistItem } from './artistCatalog.data';
+import { CanonicalArtistService, CanonicalArtist, PaginatedArtistsResponse } from './canonicalArtist.service';
 
 function normalizeArtistToken(name?: string): string {
   if (!name) return '';
@@ -195,7 +196,7 @@ export interface ArtistRecommendationCard {
   id: string;
   name: string;
   category: 'ARTIST';
-  role: 'DIRECTOR' | 'SINGER';
+  role: 'DIRECTOR' | 'SINGER' | 'ALL';
   roleTitle: string;
   languages: string[];
   imageUrl: string;
@@ -228,6 +229,26 @@ export interface DailyMixItem {
   tracks: UnifiedTrack[];
 }
 
+export interface RecommendationWeightsConfig {
+  languageMatch: number;        // 0.20 (20%)
+  artistPreference: number;     // 0.20 (20%)
+  musicDirector: number;        // 0.15 (15%)
+  listeningHistory: number;     // 0.15 (15%)
+  genreAndMood: number;         // 0.10 (10%)
+  songSimilarity: number;       // 0.10 (10%)
+  discoveryPopularity: number;  // 0.10 (10%)
+}
+
+export const DEFAULT_RECOMMENDATION_WEIGHTS: RecommendationWeightsConfig = {
+  languageMatch: 0.20,
+  artistPreference: 0.20,
+  musicDirector: 0.15,
+  listeningHistory: 0.15,
+  genreAndMood: 0.10,
+  songSimilarity: 0.10,
+  discoveryPopularity: 0.10
+};
+
 export interface PersonalizedFeedResponse {
   greeting: string;
   timeOfDay: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
@@ -237,28 +258,39 @@ export interface PersonalizedFeedResponse {
   requiresLanguageSelection?: boolean;
   generatedAt?: string;
 
-  // Ordered Home Screen Sections:
-  // 8 Required Core Sections:
+  // 15 Explicit Dynamic Home Sections:
+  madeForYou: UnifiedTrack[];
+  dailyMixes: DailyMixItem[];
+  becauseYouListenedTo: {
+    basedOn: string;
+    tracks: UnifiedTrack[];
+  };
+  basedOnFavouriteArtists: UnifiedTrack[];
+  basedOnFavouriteDirectors: UnifiedTrack[];
+  recentlyPlayed: UnifiedTrack[];
+  favouriteSongs: UnifiedTrack[];
+  similarToFavouriteSongs: UnifiedTrack[];
+  trendingInLanguages: UnifiedTrack[];
+  newReleases: UnifiedTrack[];
+  discoverSomethingNew: UnifiedTrack[];
+  yourMoodMix: MoodPlaylistCard[];
+  continueListening: UnifiedTrack[];
+  mostPlayedArtists: ArtistRecommendationCard[];
+  songsYouMayLike: UnifiedTrack[];
+
+  // Backward-compatible fields & aliases:
   recommendedForYou: UnifiedTrack[];
   basedOnListeningHistory: {
     basedOn: string;
     tracks: UnifiedTrack[];
   };
   moreFromFavouriteArtists: UnifiedTrack[];
-  similarSongs: UnifiedTrack[];
   sameMusicDirector: {
     director: string;
     tracks: UnifiedTrack[];
   };
-  trendingInLanguages: UnifiedTrack[];
-  recentlyPlayed: UnifiedTrack[];
+  similarSongs: UnifiedTrack[];
   discoverNewMusic: UnifiedTrack[];
-
-  // Supplementary Discovery & Grouping:
-  continueListening: UnifiedTrack[];
-  favouriteArtists: ArtistRecommendationCard[];
-  recommendedSingers: ArtistRecommendationCard[];
-  recommendedMusicDirectors: ArtistRecommendationCard[];
   moodPlaylists: MoodPlaylistCard[];
   popularSongs: UnifiedTrack[];
   favouriteMusicDirectors: Array<{
@@ -269,35 +301,49 @@ export interface PersonalizedFeedResponse {
     singer: string;
     tracks: UnifiedTrack[];
   }>;
-  newReleases: UnifiedTrack[];
+  favouriteArtists: ArtistRecommendationCard[];
+  recommendedSingers: ArtistRecommendationCard[];
+  recommendedMusicDirectors: ArtistRecommendationCard[];
   movieSoundtracks: MovieSoundtrack[];
-
-  // Backwards-compatible fields:
-  madeForYou: UnifiedTrack[];
   languageSections: Array<{
     language: string;
     recommended: UnifiedTrack[];
     trending: UnifiedTrack[];
     soundtracks: MovieSoundtrack[];
   }>;
-  becauseYouListenedTo: {
-    basedOn: string;
-    tracks: UnifiedTrack[];
-  };
   favouriteArtistPicks: Array<{
     artist: string;
-    role?: 'DIRECTOR' | 'SINGER';
+    role?: 'DIRECTOR' | 'SINGER' | 'ALL';
     roleTitle?: string;
     imageUrl?: string;
     tracks: UnifiedTrack[];
   }>;
-  dailyMixes: DailyMixItem[];
   timeBasedPicks: {
     contextName: string;
     description: string;
     tracks: UnifiedTrack[];
   };
   discoverNew: UnifiedTrack[];
+}
+
+export interface DiscoverFeedResponse {
+  preferredLanguages: string[];
+  recommendedArtists: ArtistRecommendationCard[];
+  similarArtists: ArtistRecommendationCard[];
+  popularSongs: UnifiedTrack[];
+  trendingMusic: UnifiedTrack[];
+  newReleases: UnifiedTrack[];
+  moodCategories: MoodPlaylistCard[];
+  genreCategories: Array<{
+    id: string;
+    name: string;
+    trackCount: number;
+    tracks: UnifiedTrack[];
+  }>;
+  musicDirectorCollections: Array<{
+    director: string;
+    tracks: UnifiedTrack[];
+  }>;
 }
 
 export interface SmartPlaylistRequest {
@@ -560,11 +606,15 @@ export class RecommendationEngineService {
     const playlistSongIds = new Set<string>(userPlaylists.flatMap((p) => p.songIds));
     const seed = context?.refreshSeed || '';
 
-    // Collect hidden items to filter out
+    // Collect negative signals: HIDE, DISLIKE, NOT_INTERESTED
     const hiddenSet = new Set<string>();
+    const hiddenArtists = new Set<string>();
     feedbacks.forEach((f) => {
-      if (f.feedbackType === 'HIDE' || f.feedbackType === 'DISLIKE') {
+      if (f.feedbackType === 'HIDE' || f.feedbackType === 'DISLIKE' || f.feedbackType === 'NOT_INTERESTED') {
         hiddenSet.add(f.targetId);
+        if (f.targetType === 'ARTIST' || f.targetType === 'COMPOSER') {
+          hiddenArtists.add(normalizeArtistToken(f.targetId));
+        }
       }
     });
 
@@ -620,29 +670,41 @@ export class RecommendationEngineService {
         preferredLanguages: [],
         requiresLanguageSelection: true,
         generatedAt: new Date().toISOString(),
+
+        // 15 Explicit Dynamic Home Sections:
+        madeForYou: [],
+        dailyMixes: [],
+        becauseYouListenedTo: { basedOn: '', tracks: [] },
+        basedOnFavouriteArtists: [],
+        basedOnFavouriteDirectors: [],
+        recentlyPlayed: [],
+        favouriteSongs: [],
+        similarToFavouriteSongs: [],
+        trendingInLanguages: [],
+        newReleases: [],
+        discoverSomethingNew: [],
+        yourMoodMix: [],
+        continueListening: [],
+        mostPlayedArtists: [],
+        songsYouMayLike: [],
+
+        // Backward-compatible fields:
         recommendedForYou: [],
         basedOnListeningHistory: { basedOn: '', tracks: [] },
         moreFromFavouriteArtists: [],
-        similarSongs: [],
         sameMusicDirector: { director: '', tracks: [] },
-        trendingInLanguages: [],
-        recentlyPlayed: [],
+        similarSongs: [],
         discoverNewMusic: [],
-        continueListening: [],
-        favouriteArtists: [],
-        recommendedSingers: [],
-        recommendedMusicDirectors: [],
         moodPlaylists: [],
         popularSongs: [],
         favouriteMusicDirectors: [],
         favouriteSingers: [],
-        newReleases: [],
+        favouriteArtists: [],
+        recommendedSingers: [],
+        recommendedMusicDirectors: [],
         movieSoundtracks: [],
-        madeForYou: [],
         languageSections: [],
-        becauseYouListenedTo: { basedOn: '', tracks: [] },
         favouriteArtistPicks: [],
-        dailyMixes: [],
         timeBasedPicks: { contextName: timeInfo.title, description: timeInfo.desc, tracks: [] },
         discoverNew: []
       };
@@ -726,12 +788,15 @@ export class RecommendationEngineService {
 
     const userLanguagesSet = new Set(activeLanguages.map((l) => l.toLowerCase().trim()));
 
-    // Filter out hidden tracks, ensure track is playable, and strictly enforce user's selected languages
+    // Filter out hidden tracks, ensure track is playable, and strictly enforce user's selected languages.
+    // Pre-filtering: Songs with missing language metadata or outside user's selected languages are strictly excluded.
     const availableTracks = masterCatalog.filter(
       (t) =>
         !hiddenSet.has(t.id) &&
-        Boolean(t.videoId || t.fullAudioUrl || t.previewUrl) &&
-        Boolean(t.language && userLanguagesSet.has(t.language.toLowerCase().trim()))
+        Boolean(t.videoId || t.fullAudioUrl || t.previewUrl || t.isPlayableDirectly) &&
+        Boolean(t.language && t.language.trim() && userLanguagesSet.has(t.language.toLowerCase().trim())) &&
+        !hiddenArtists.has(normalizeArtistToken(t.artist)) &&
+        !hiddenArtists.has(normalizeArtistToken(t.composer))
     );
 
     // Track recently played song IDs for anti-repetition balancing
@@ -739,14 +804,14 @@ export class RecommendationEngineService {
       playHistory.slice(0, 5).map((ph) => ph.songId)
     );
 
-    // Calculate score for each candidate track using normalized 7-factor weighted scoring model
-    // 1. Selected artist match: 25%
-    // 2. Language match: 20%
-    // 3. Music director match: 15%
-    // 4. Listening history similarity: 15%
-    // 5. Genre and mood similarity: 10%
-    // 6. Song/movie/album relationship: 10%
-    // 7. Discovery and diversity score: 5%
+    // Calculate score for each candidate track using normalized 7-factor weighted scoring model:
+    // 1. Language Preference: 20%
+    // 2. Artist Preference: 20%
+    // 3. Music Director Preference: 15%
+    // 4. Listening History & Behaviour: 15%
+    // 5. Genre & Mood Preference: 10%
+    // 6. Song Similarity: 10%
+    // 7. Discovery & Popularity: 10%
     const now = Date.now();
     const favArtistsSet = new Set([
       ...(preferences.favouriteArtists || []),
@@ -760,17 +825,26 @@ export class RecommendationEngineService {
     const prefMovies = preferences.favouriteMovies || [];
     const hasHistory = userSongStats.length > 0 || playHistory.length > 0;
 
+    const weights = DEFAULT_RECOMMENDATION_WEIGHTS;
+
     const scoredTracks = availableTracks.map((track) => {
       let totalWeightedScore = 0;
       let applicableWeight = 0;
       let reason = '';
 
-      // 1. Selected Artist Match: 25%
+      // 1. Selected Language Match: 20%
+      applicableWeight += weights.languageMatch;
+      if (track.language && activeLanguages.some((l) => eq(l, track.language))) {
+        totalWeightedScore += weights.languageMatch * 1.0;
+        if (!reason) reason = `Popular in ${track.language}`;
+      }
+
+      // 2. Favourite Singers and Artists: 20%
+      applicableWeight += weights.artistPreference;
       const trackArtistLower = (track.artist || '').toLowerCase();
       const trackSingersLower = (track.singers || []).map((s) => s.toLowerCase());
+      let artistScore = 0.3; // Baseline score
       if (favArtistsSet.size > 0) {
-        applicableWeight += 25;
-        let artistScore = 0;
         if (favArtistsSet.has(trackArtistLower) || trackSingersLower.some((s) => favArtistsSet.has(s))) {
           artistScore = 1.0;
           const matched = (track.singers || []).find((s) => favArtistsSet.has(s.toLowerCase())) || track.artist;
@@ -779,99 +853,113 @@ export class RecommendationEngineService {
           artistScore = 0.8;
           reason = `Because you like ${track.artist}`;
         }
-        totalWeightedScore += 25 * artistScore;
+      } else if (singerWeights.has(trackArtistLower)) {
+        artistScore = Math.min(1.0, Math.max(0.2, (singerWeights.get(trackArtistLower) || 0) / 20));
       }
+      totalWeightedScore += weights.artistPreference * artistScore;
 
-      // 2. Language Match: 20%
-      if (track.language) {
-        applicableWeight += 20;
-        const isLangMatch = activeLanguages.some((l) => eq(l, track.language));
-        if (isLangMatch) {
-          totalWeightedScore += 20 * 1.0;
-          if (!reason) reason = `Popular in ${track.language}`;
-        }
-      }
-
-      // 3. Music Director Match: 15%
+      // 3. Favourite Music Directors: 15%
+      applicableWeight += weights.musicDirector;
       const composerLower = (track.composer || track.artist || '').toLowerCase();
-      if (track.composer || favDirectorsSet.size > 0) {
-        applicableWeight += 15;
-        let dirScore = 0;
+      let dirScore = 0.3;
+      if (favDirectorsSet.size > 0) {
         if (favDirectorsSet.has(composerLower)) {
           dirScore = 1.0;
           if (!reason) reason = `Composed by ${track.composer || track.artist}`;
         } else if (directorWeights.has(composerLower)) {
           const raw = directorWeights.get(composerLower) || 0;
-          dirScore = Math.min(1.0, Math.max(0, raw / 20));
+          dirScore = Math.min(1.0, Math.max(0.2, raw / 20));
           if (dirScore > 0.5 && !reason) reason = `Music by ${track.composer || track.artist}`;
         }
-        totalWeightedScore += 15 * dirScore;
+      } else if (directorWeights.has(composerLower)) {
+        const raw = directorWeights.get(composerLower) || 0;
+        dirScore = Math.min(1.0, Math.max(0.2, raw / 20));
       }
+      totalWeightedScore += weights.musicDirector * dirScore;
 
-      // 4. Listening History Similarity: 15%
-      const stat = songStatMap.get(track.id);
-      if (hasHistory) {
-        applicableWeight += 15;
-        let histScore = 0;
-        if (stat) {
-          if (stat.replayCount > 0) {
-            histScore = 1.0;
-            if (!reason) reason = `Frequently replayed by you`;
-          } else if (stat.playCount > 0) {
-            histScore = Math.min(1.0, stat.playCount * 0.35);
-            if (!reason) reason = `Based on your listening history`;
-          }
-          if (stat.skipCount > 0) {
-            histScore = Math.max(0, histScore - stat.skipCount * 0.4);
-          }
-        } else {
-          const artistHistory = (playHistory || []).find((h) => eq(h.artistName, track.artist));
-          if (artistHistory) {
-            histScore = 0.7;
-            if (!reason) reason = `Based on your recent listening`;
-          }
-        }
-        totalWeightedScore += 15 * histScore;
-      }
-
-      // 5. Genre and Mood Similarity: 10%
-      if (track.genre || track.mood || prefGenres.length > 0 || prefMoods.length > 0) {
-        applicableWeight += 10;
-        let gmScore = 0;
+      // 4. Preferred Genres and Moods: 10%
+      applicableWeight += weights.genreAndMood;
+      let gmScore = 0.4;
+      if (prefGenres.length > 0 || prefMoods.length > 0) {
+        let matchScore = 0;
         if (track.genre && prefGenres.some((g) => eq(g, track.genre))) {
-          gmScore += 0.6;
+          matchScore += 0.6;
         }
         if (track.mood && prefMoods.some((m: string) => eq(m, track.mood))) {
-          gmScore += 0.4;
+          matchScore += 0.4;
         }
-        totalWeightedScore += 10 * Math.min(1.0, gmScore);
+        gmScore = Math.min(1.0, matchScore);
       }
+      totalWeightedScore += weights.genreAndMood * gmScore;
 
-      // 6. Song / Movie / Album Relationship: 10%
-      if (track.movieName || track.album) {
-        applicableWeight += 10;
-        let relScore = 0;
-        if (track.movieName && prefMovies.some((m) => eq(m, track.movieName))) {
-          relScore = 1.0;
-          if (!reason) reason = `From soundtrack ${track.movieName}`;
-        } else if (likedSet.has(track.id) || playlistSongIds.has(track.id)) {
-          relScore = 0.9;
-          if (!reason) reason = `From your favourites`;
+      // 5. Listening Behaviour and History: 15%
+      applicableWeight += weights.listeningHistory;
+      const stat = songStatMap.get(track.id);
+      let histScore = 0.4;
+      if (stat) {
+        if (stat.replayCount > 0) {
+          histScore = 1.0;
+          if (!reason) reason = `Frequently replayed by you`;
+        } else if (stat.playCount > 0) {
+          histScore = Math.min(1.0, 0.4 + stat.playCount * 0.2);
+          if (!reason) reason = `Based on your listening history`;
         }
-        totalWeightedScore += 10 * relScore;
+        if (stat.isFavorite) {
+          histScore = Math.min(1.0, histScore + 0.3);
+        }
+        if (stat.skipCount === 2) {
+          histScore = Math.max(0, histScore - 0.2);
+        } else if (stat.skipCount >= 3) {
+          histScore = Math.max(0, histScore - 0.7);
+        }
+      } else if (hasHistory) {
+        const artistHistory = (playHistory || []).find((h) => eq(h.artistName, track.artist));
+        if (artistHistory) {
+          histScore = 0.7;
+          if (!reason) reason = `Based on your recent listening`;
+        }
       }
+      totalWeightedScore += weights.listeningHistory * histScore;
 
-      // 7. Discovery and Diversity Score: 5%
-      applicableWeight += 5;
+      // 6. Song Similarity: 10%
+      applicableWeight += weights.songSimilarity;
+      let simScore = 0.4;
+      if (likedSet.has(track.id) || playlistSongIds.has(track.id)) {
+        simScore = 1.0;
+        if (!reason) reason = `From your favourites`;
+      } else if (track.movieName && prefMovies.some((m) => eq(m, track.movieName))) {
+        simScore = 0.9;
+        if (!reason) reason = `From soundtrack ${track.movieName}`;
+      } else {
+        const matchingDirector = favDirectorsSet.has(composerLower) || directorWeights.has(composerLower);
+        const matchingSinger = favArtistsSet.has(trackArtistLower) || singerWeights.has(trackArtistLower);
+        if (matchingDirector && matchingSinger) simScore = 0.85;
+        else if (matchingDirector || matchingSinger) simScore = 0.7;
+      }
+      totalWeightedScore += weights.songSimilarity * simScore;
+
+      // 7. Discovery & Popularity: 10%
+      applicableWeight += weights.discoveryPopularity;
+      let discScore = 0.5;
       const isFreshArtist = !favArtistsSet.has(trackArtistLower) && !(playHistory || []).some((h) => eq(h.artistName, track.artist));
-      let divScore = isFreshArtist ? 1.0 : 0.4;
-      if (seed) {
-        divScore = (divScore + ((deterministicSeedHash(`${track.id}:${seed}`) % 5) / 10)) / 1.5;
+      discScore = isFreshArtist ? 0.8 : 0.5;
+      if (track.releaseYear && track.releaseYear >= 2022) {
+        discScore = Math.min(1.0, discScore + 0.2);
       }
-      totalWeightedScore += 5 * Math.min(1.0, divScore);
+      if (seed) {
+        discScore = (discScore + ((deterministicSeedHash(`${track.id}:${seed}`) % 5) / 10)) / 1.5;
+      }
+      totalWeightedScore += weights.discoveryPopularity * Math.min(1.0, discScore);
 
       // Normalization (Score scaled to 0-100)
-      const score = applicableWeight > 0 ? (totalWeightedScore / applicableWeight) * 100 : 50;
+      let score = applicableWeight > 0 ? (totalWeightedScore / applicableWeight) * 100 : 50;
+
+      // Negative signal: Repeatedly skipped songs (skip count >= 3) are heavily penalized (75% penalty multiplier)
+      // Note: A single skip (skip count === 1) is NOT penalized with this penalty multiplier.
+      if (stat && stat.skipCount >= 3) {
+        score *= 0.25;
+      }
+
       const enrichedTrack: UnifiedTrack = {
         ...track,
         recommendationReason: reason || `Recommended for you`
@@ -887,7 +975,7 @@ export class RecommendationEngineService {
     // BUILD THE 10 PERSONALIZED DASHBOARD SECTIONS
     // ==========================================================
 
-    // 1. Recently Played (from userSongStats / playHistory)
+    // 1. Recently Played (from userSongStats / playHistory) - strictly empty if user hasn't played songs
     let recentlyPlayed: UnifiedTrack[] = [];
     if (userSongStats.length > 0) {
       for (const stat of userSongStats) {
@@ -904,16 +992,9 @@ export class RecommendationEngineService {
         }
       }
     }
-    // Fallback if user is brand new: top 6 active language songs
-    if (recentlyPlayed.length === 0) {
-      recentlyPlayed = availableTracks
-        .filter((t) => activeLanguages.some((l) => eq(l, t.language)))
-        .slice(0, 6);
-    } else {
-      recentlyPlayed = recentlyPlayed.slice(0, 10);
-    }
+    recentlyPlayed = recentlyPlayed.slice(0, 10);
 
-    // 2. Continue Listening (uncompleted tracks or session resumes)
+    // 2. Continue Listening (uncompleted tracks or session resumes) - strictly empty if no listening session
     let continueListening: UnifiedTrack[] = [];
     const continueCandidates = userSongStats.filter(
       (s) => s.totalListeningDurationMs > 20000 && s.skipCount === 0
@@ -924,14 +1005,7 @@ export class RecommendationEngineService {
         continueListening.push(found);
       }
     }
-    if (continueListening.length === 0) {
-      // Gentle evergreen picks
-      continueListening = availableTracks
-        .filter((t) => t.title.toLowerCase().includes('nenjukkul') || t.title.toLowerCase().includes('malare') || t.title.toLowerCase().includes('samajavaragamana'))
-        .slice(0, 4);
-    } else {
-      continueListening = continueListening.slice(0, 6);
-    }
+    continueListening = continueListening.slice(0, 6);
 
     // Diversity-balanced Made For You list (prevents stacking >2 songs from same artist in top slots)
     const diversifiedMadeForYou: UnifiedTrack[] = [];
@@ -957,34 +1031,39 @@ export class RecommendationEngineService {
     const recommendedForYou = diversifiedMadeForYou;
     const madeForYou = recommendedForYou;
 
-    // 4. Based on Your Listening History
-    let topDirectorOrSinger =
-      preferences.favouriteComposers.find((c) => availableTracks.some((t) => artistMatches(t.composer, c) || artistMatches(t.artist, c))) ||
-      preferences.favouriteArtists.find((a) => availableTracks.some((t) => artistMatches(t.composer, a) || artistMatches(t.artist, a))) ||
-      availableTracks[0]?.composer ||
-      availableTracks[0]?.artist ||
-      'Top Artist';
-    let maxWeight = -Infinity;
-    for (const [dir, w] of directorWeights.entries()) {
-      if (w > maxWeight && availableTracks.some((t) => artistMatches(t.composer, dir) || artistMatches(t.artist, dir))) {
-        maxWeight = w;
-        const matched = ARTISTS_CATALOG.find((a) => normalizeArtistToken(a.name) === normalizeArtistToken(dir));
-        topDirectorOrSinger = matched ? matched.name : dir;
+    // 4. Based on Your Listening History - only shown if user has actual listening history
+    let topDirectorOrSinger = '';
+    let basedOnListeningHistoryTracks: UnifiedTrack[] = [];
+    if (hasHistory) {
+      let maxWeight = -Infinity;
+      for (const [dir, w] of directorWeights.entries()) {
+        if (w > maxWeight && availableTracks.some((t) => artistMatches(t.composer, dir) || artistMatches(t.artist, dir))) {
+          maxWeight = w;
+          const matched = ARTISTS_CATALOG.find((a) => normalizeArtistToken(a.name) === normalizeArtistToken(dir));
+          topDirectorOrSinger = matched ? matched.name : dir;
+        }
+      }
+      if (!topDirectorOrSinger && userSongStats.length > 0) {
+        topDirectorOrSinger = userSongStats[0].musicDirector || userSongStats[0].singers?.[0] || '';
+      }
+      if (topDirectorOrSinger) {
+        const matchingHistTracks = availableTracks.filter(
+          (t) => artistMatches(t.artist, topDirectorOrSinger) || artistMatches(t.composer, topDirectorOrSinger)
+        );
+        basedOnListeningHistoryTracks = matchingHistTracks.slice(0, 12);
       }
     }
-    const matchingHistTracks = availableTracks
-      .filter((t) => artistMatches(t.artist, topDirectorOrSinger) || artistMatches(t.composer, topDirectorOrSinger));
-    const basedOnListeningHistoryTracks = (matchingHistTracks.length > 0 ? matchingHistTracks : availableTracks).slice(0, 12);
 
-    // 5. Favourite Music Directors
+    // 5. Favourite Music Directors (User preferences + dynamic history + language catalog)
     const sortedDirectors = Array.from(directorWeights.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([name]) => {
         const matched = ARTISTS_CATALOG.find((a) => normalizeArtistToken(a.name) === normalizeArtistToken(name));
         return matched ? matched.name : name;
       });
+    const languageDirectors = queryArtistsCatalog({ role: 'DIRECTOR', languages: activeLanguages }).map((a) => a.name);
     const targetDirectors = Array.from(
-      new Set([...sortedDirectors, ...preferences.favouriteComposers, 'A. R. Rahman', 'Anirudh Ravichander', 'Harris Jayaraj'])
+      new Set([...preferences.favouriteComposers, ...sortedDirectors, ...languageDirectors])
     ).slice(0, 6);
 
     const favouriteMusicDirectors = targetDirectors.map((dir) => ({
@@ -992,15 +1071,16 @@ export class RecommendationEngineService {
       tracks: availableTracks.filter((t) => artistMatches(t.composer, dir) || artistMatches(t.artist, dir)).slice(0, 10)
     })).filter((group) => group.tracks.length > 0);
 
-    // 6. Favourite Singers
+    // 6. Favourite Singers (User preferences + dynamic history + language catalog)
     const sortedSingers = Array.from(singerWeights.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([name]) => {
         const matched = ARTISTS_CATALOG.find((a) => normalizeArtistToken(a.name) === normalizeArtistToken(name));
         return matched ? matched.name : name;
       });
+    const languageSingers = queryArtistsCatalog({ role: 'SINGER', languages: activeLanguages }).map((a) => a.name);
     const targetSingers = Array.from(
-      new Set([...sortedSingers, ...(preferences.favouriteSingers || []), 'Sid Sriram', 'S. P. Balasubrahmanyam', 'Shreya Ghoshal', 'Arijit Singh', 'Hariharan', 'K. S. Chithra'])
+      new Set([...(preferences.favouriteSingers || []), ...(preferences.favouriteArtists || []), ...sortedSingers, ...languageSingers])
     ).slice(0, 8);
 
     const favouriteSingers = targetSingers.map((sin) => ({
@@ -1189,28 +1269,38 @@ export class RecommendationEngineService {
     // Similar Songs (based on listening history, recently played movies, composers & liked/playlist songs)
     const seedReferenceTracks = [
       ...recentlyPlayed.slice(0, 4),
-      ...availableTracks.filter((t) => likedSet.has(t.id) || playlistSongIds.has(t.id)).slice(0, 4)
+      ...availableTracks.filter((t) => likedSet.has(t.id) || playlistSongIds.has(t.id)).slice(0, 4),
+      ...(recentlyPlayed.length === 0 && !likedSet.size && !playlistSongIds.size && (preferences.favouriteArtists?.length || preferences.favouriteComposers?.length)
+        ? availableTracks.filter((t) =>
+            (preferences.favouriteArtists || []).some((a) => artistMatches(t.artist, a)) ||
+            (preferences.favouriteComposers || []).some((c) => artistMatches(t.composer, c))
+          ).slice(0, 4)
+        : [])
     ];
-    const seedMovies = new Set(seedReferenceTracks.map((t) => t.movieName).filter(Boolean));
-    const seedComposers = new Set(seedReferenceTracks.map((t) => normalizeArtistToken(t.composer || t.artist)).filter(Boolean));
-    const seedSingers = new Set(seedReferenceTracks.flatMap((t) => (t.singers || []).map((s) => normalizeArtistToken(s))));
-    const seedIds = new Set(seedReferenceTracks.map((t) => t.id));
 
-    const similarSongs = availableTracks
-      .map((track) => {
-        let sim = 0;
-        if (seedMovies.has(track.movieName)) sim += 35;
-        if (seedComposers.has(normalizeArtistToken(track.composer || track.artist))) sim += 25;
-        if (track.singers?.some((s) => seedSingers.has(normalizeArtistToken(s)))) sim += 20;
-        if (track.language && activeLanguages.some((l) => eq(l, track.language))) sim += 15;
-        if (seed) sim += (deterministicSeedHash(`sim:${track.id}:${seed}`) % 7) - 3;
-        // Prefer similar tracks not identical to top recentlyPlayed slots
-        if (seedIds.has(track.id)) sim -= 8;
-        return { track, sim };
-      })
-      .sort((a, b) => b.sim - a.sim)
-      .map((s) => s.track)
-      .slice(0, 16);
+    let similarSongs: UnifiedTrack[] = [];
+    if (seedReferenceTracks.length > 0) {
+      const seedMovies = new Set(seedReferenceTracks.map((t) => t.movieName).filter(Boolean));
+      const seedComposers = new Set(seedReferenceTracks.map((t) => normalizeArtistToken(t.composer || t.artist)).filter(Boolean));
+      const seedSingers = new Set(seedReferenceTracks.flatMap((t) => (t.singers || []).map((s) => normalizeArtistToken(s))));
+      const seedIds = new Set(seedReferenceTracks.map((t) => t.id));
+
+      similarSongs = availableTracks
+        .map((track) => {
+          let sim = 0;
+          if (seedMovies.has(track.movieName)) sim += 35;
+          if (seedComposers.has(normalizeArtistToken(track.composer || track.artist))) sim += 25;
+          if (track.singers?.some((s) => seedSingers.has(normalizeArtistToken(s)))) sim += 20;
+          if (track.language && activeLanguages.some((l) => eq(l, track.language))) sim += 15;
+          if (seed) sim += (deterministicSeedHash(`sim:${track.id}:${seed}`) % 7) - 3;
+          // Prefer similar tracks not identical to top recentlyPlayed slots
+          if (seedIds.has(track.id)) sim -= 8;
+          return { track, sim };
+        })
+        .sort((a, b) => b.sim - a.sim)
+        .map((s) => s.track)
+        .slice(0, 16);
+    }
 
     // Popular Songs (popular hits across selected artists & chartbusters)
     const popularTitleSet = new Set(
@@ -1300,13 +1390,38 @@ export class RecommendationEngineService {
       };
     }).filter((s) => s.recommended.length > 0 || s.soundtracks.length > 0);
 
-    // Daily Mixes
-    const dailyMixes = this.generateDailyMixes(userId, availableTracks, activeLanguages);
+    // 7. Your Favourite Songs (Explicitly favorited / liked tracks)
+    const userFavorites = syncStore.getUserFavorites(userId);
+    const favoriteSongIds = new Set<string>([
+      ...userFavorites,
+      ...userSongStats.filter((s) => s.isFavorite).map((s) => s.songId),
+      ...Array.from(likedSet)
+    ]);
+    const favouriteSongs: UnifiedTrack[] = availableTracks.filter((t) => favoriteSongIds.has(t.id));
 
-    // Time-based picks
-    const timeBasedTracks = availableTracks
-      .filter((t) => activeLanguages.some((l) => eq(l, t.language)))
-      .slice(0, 10);
+    // 8. Similar to Your Favourite Songs
+    let similarToFavouriteSongs: UnifiedTrack[] = [];
+    if (favouriteSongs.length > 0) {
+      const favComposers = new Set(favouriteSongs.map((t) => normalizeArtistToken(t.composer || t.artist)).filter(Boolean));
+      const favSingers = new Set(favouriteSongs.flatMap((t) => (t.singers || []).map((s) => normalizeArtistToken(s))));
+      const favMovies = new Set(favouriteSongs.map((t) => t.movieName).filter(Boolean));
+
+      similarToFavouriteSongs = availableTracks
+        .filter((t) => !favoriteSongIds.has(t.id))
+        .map((t) => {
+          let sim = 0;
+          if (favComposers.has(normalizeArtistToken(t.composer || t.artist))) sim += 35;
+          if (t.singers?.some((s) => favSingers.has(normalizeArtistToken(s)))) sim += 25;
+          if (t.movieName && favMovies.has(t.movieName)) sim += 30;
+          return { track: t, sim };
+        })
+        .filter((s) => s.sim > 0)
+        .sort((a, b) => b.sim - a.sim)
+        .map((s) => s.track);
+    }
+    if (similarToFavouriteSongs.length === 0) {
+      similarToFavouriteSongs = similarSongs;
+    }
 
     const favArtistTrackCandidates = availableTracks.filter((t) => {
       const aLower = (t.artist || '').toLowerCase();
@@ -1341,6 +1456,43 @@ export class RecommendationEngineService {
       tracks: (sameDirectorTracks.length > 0 ? sameDirectorTracks : availableTracks).slice(0, 16)
     };
 
+    // 4. Based on Your Favourite Artists
+    const basedOnFavouriteArtists = moreFromFavouriteArtists;
+
+    // 5. Based on Your Favourite Music Directors
+    const basedOnFavouriteDirectors = sameMusicDirector.tracks;
+
+    // 11. Discover Something New
+    const discoverSomethingNew = discoverNewMusic;
+
+    // 12. Your Mood Mix
+    const yourMoodMix = moodPlaylists;
+
+    // 14. Your Most Played Artists
+    const mostPlayedArtists = favouriteArtists;
+
+    // 15. Songs You May Like
+    const topMadeForYouIds = new Set(madeForYou.slice(0, 6).map((t) => t.id));
+    const songsYouMayLike = scoredTracks
+      .map((s) => s.track)
+      .filter((t) => !topMadeForYouIds.has(t.id))
+      .slice(0, 16);
+
+    // Daily Mixes
+    const dailyMixes = this.generateDailyMixes(
+      userId,
+      availableTracks,
+      activeLanguages,
+      preferences,
+      userSongStats,
+      feedbacks
+    );
+
+    // Time-based picks
+    const timeBasedTracks = availableTracks
+      .filter((t) => activeLanguages.some((l) => eq(l, t.language)))
+      .slice(0, 10);
+
     return {
       greeting: timeInfo.greeting,
       timeOfDay,
@@ -1349,38 +1501,45 @@ export class RecommendationEngineService {
       preferredLanguages: activeLanguages,
       generatedAt: new Date().toISOString(),
 
-      // 8 Required Core Sections:
+      // 15 Explicit Dynamic Home Sections:
+      madeForYou,
+      dailyMixes,
+      becauseYouListenedTo: {
+        basedOn: topDirectorOrSinger,
+        tracks: basedOnListeningHistoryTracks
+      },
+      basedOnFavouriteArtists,
+      basedOnFavouriteDirectors,
+      recentlyPlayed,
+      favouriteSongs,
+      similarToFavouriteSongs,
+      trendingInLanguages,
+      newReleases,
+      discoverSomethingNew,
+      yourMoodMix,
+      continueListening,
+      mostPlayedArtists,
+      songsYouMayLike,
+
+      // Backward-compatible fields:
       recommendedForYou,
       basedOnListeningHistory: {
         basedOn: topDirectorOrSinger,
         tracks: basedOnListeningHistoryTracks
       },
       moreFromFavouriteArtists,
-      similarSongs,
       sameMusicDirector,
-      trendingInLanguages,
-      recentlyPlayed,
+      similarSongs,
       discoverNewMusic,
-
-      // Supplementary & Dashboard Groups:
-      continueListening,
-      favouriteArtists,
-      recommendedSingers,
-      recommendedMusicDirectors,
       moodPlaylists,
       popularSongs,
       favouriteMusicDirectors,
       favouriteSingers,
-      newReleases,
+      favouriteArtists,
+      recommendedSingers,
+      recommendedMusicDirectors,
       movieSoundtracks,
-
-      // Backwards-compatible fields:
-      madeForYou,
       languageSections,
-      becauseYouListenedTo: {
-        basedOn: topDirectorOrSinger,
-        tracks: basedOnListeningHistoryTracks
-      },
       favouriteArtistPicks: favouriteArtists.map((a) => ({
         artist: a.name,
         role: a.role,
@@ -1388,7 +1547,6 @@ export class RecommendationEngineService {
         imageUrl: a.imageUrl,
         tracks: a.tracks
       })),
-      dailyMixes,
       timeBasedPicks: {
         contextName: timeInfo.title,
         description: timeInfo.desc,
@@ -1503,117 +1661,161 @@ export class RecommendationEngineService {
   }
 
   /**
-   * Retrieves artist catalog with filtering and language priority
+   * Retrieves artist catalog with strict language filtering and canonical deduplication
    */
   static getArtistsCatalog(options?: {
     languages?: string[];
     role?: 'DIRECTOR' | 'SINGER' | 'ALL';
     query?: string;
     limit?: number;
+    includeAllLanguages?: boolean;
   }): ArtistItem[] {
     return queryArtistsCatalog(options);
   }
 
+  static getPaginatedArtistsCatalog(options?: {
+    languages?: string[];
+    role?: 'DIRECTOR' | 'SINGER' | 'ALL';
+    query?: string;
+    page?: number;
+    limit?: number;
+    includeAllLanguages?: boolean;
+  }): PaginatedArtistsResponse {
+    return CanonicalArtistService.getArtists(options);
+  }
+
   /**
-   * Generates structured Daily Mixes tailored to user language & composer affinities
+   * Generates dynamic Daily Mixes tailored to user preferences, listening stats, and selected languages
    */
   private static generateDailyMixes(
     userId: string,
     tracks: UnifiedTrack[],
-    languages: string[]
+    languages: string[],
+    preferences?: UserMusicPreference,
+    userSongStats?: SongListeningStat[],
+    feedbacks?: RecommendationFeedbackRecord[]
   ): DailyMixItem[] {
     const mixes: DailyMixItem[] = [];
-
-    // 1. Language Daily Mix
     const primaryLang = languages[0] || 'Tamil';
-    const langTracks = tracks.filter((t) => eq(t.language, primaryLang));
-    if (langTracks.length >= 3) {
+
+    // 1. Melody Mix
+    const melodyTracks = tracks.filter((t) => {
+      const titleLower = t.title.toLowerCase();
+      const isMelodyGenre = t.genre?.toLowerCase() === 'melody';
+      const isMelodyMood = t.mood?.toLowerCase() === 'romantic' || t.mood?.toLowerCase() === 'love';
+      const isMelodyKeyword = /nenjukkul|mundhinam|samajavaragamana|malare|hosanna|tum hi ho|cherathukal|anbenum|srivalli|chaleya|satrangi|chinna|kaadhal/i.test(titleLower);
+      return isMelodyGenre || isMelodyMood || isMelodyKeyword;
+    });
+    const finalMelodyTracks = (melodyTracks.length >= 3 ? melodyTracks : tracks).slice(0, 12);
+    if (finalMelodyTracks.length > 0) {
       mixes.push({
-        id: `mix_${primaryLang.toLowerCase()}_daily`,
-        title: `${primaryLang} Daily Mix`,
-        subtitle: `Your daily rotation of ${primaryLang} favorites & fresh arrivals`,
+        id: `mix_${primaryLang.toLowerCase()}_melody`,
+        title: `${primaryLang} Melody Mix`,
+        subtitle: 'Heart-touching cinema melodies and golden acoustic duets',
         language: primaryLang,
-        coverUrl: langTracks[0]?.artworkUrl || 'https://i.ytimg.com/vi/FzLpP8VBC6E/hqdefault.jpg',
-        trackCount: langTracks.length,
-        tracks: langTracks.slice(0, 10)
+        coverUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=600&q=80',
+        trackCount: finalMelodyTracks.length,
+        tracks: finalMelodyTracks
       });
     }
 
-    // 2. Evergreen Melody Mix
-    const melodyTracks = tracks.filter((t) =>
-      t.title.toLowerCase().includes('nenjukkul') ||
-      t.title.toLowerCase().includes('chinna') ||
-      t.title.toLowerCase().includes('malare') ||
-      t.title.toLowerCase().includes('samajavaragamana') ||
-      t.title.toLowerCase().includes('hosanna') ||
-      t.title.toLowerCase().includes('tum hi ho')
-    );
-    if (melodyTracks.length > 0) {
+    // 2. Favourite Artists Mix
+    const favArtists = new Set([
+      ...(preferences?.favouriteArtists || []),
+      ...(preferences?.favouriteSingers || []),
+      ...(preferences?.favouriteComposers || [])
+    ].map((a) => a.toLowerCase().trim()));
+
+    const artistTracks = tracks.filter((t) => {
+      const art = (t.artist || '').toLowerCase();
+      const comp = (t.composer || '').toLowerCase();
+      const sings = (t.singers || []).map((s) => s.toLowerCase());
+      return (
+        Array.from(favArtists).some((fa) => art.includes(fa) || fa.includes(art) || comp.includes(fa) || fa.includes(comp) || sings.some((s) => s.includes(fa) || fa.includes(s)))
+      );
+    });
+    const finalArtistTracks = (artistTracks.length >= 3 ? artistTracks : tracks.slice().reverse()).slice(0, 12);
+    if (finalArtistTracks.length > 0) {
+      const artistHeader = preferences?.favouriteComposers?.[0] || preferences?.favouriteSingers?.[0] || preferences?.favouriteArtists?.[0] || 'Your Favourites';
       mixes.push({
-        id: 'mix_evergreen_melody',
-        title: 'Evergreen Melody Mix',
-        subtitle: 'Heart-touching cinema melodies and golden acoustics',
+        id: `mix_${userId}_favourite_artists`,
+        title: 'Favourite Artists Mix',
+        subtitle: `Curated selections featuring ${artistHeader} and your favorite artists`,
         language: primaryLang,
-        coverUrl: melodyTracks[0]?.artworkUrl || 'https://i.ytimg.com/vi/IJq0yyWug1k/hqdefault.jpg',
-        trackCount: melodyTracks.length,
-        tracks: melodyTracks
+        coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
+        trackCount: finalArtistTracks.length,
+        tracks: finalArtistTracks
       });
     }
 
-    // 3. A. R. Rahman & Master Composers Mix
-    const composerTracks = tracks.filter((t) =>
-      t.composer?.toLowerCase().includes('rahman') || t.artist?.toLowerCase().includes('rahman')
-    );
-    if (composerTracks.length > 0) {
+    // 3. Relaxing Mix
+    const relaxTracks = tracks.filter((t) => {
+      const titleLower = t.title.toLowerCase();
+      const isRelaxMood = t.mood?.toLowerCase() === 'relaxing' || t.mood?.toLowerCase() === 'melancholic';
+      const isRelaxKeyword = /cherathukal|aluva|annul|silent|pudhu vellai|pathivayi|anbil|ezhutha|kaadhal|viva/i.test(titleLower);
+      return isRelaxMood || isRelaxKeyword;
+    });
+    const finalRelaxTracks = (relaxTracks.length >= 3 ? relaxTracks : tracks.slice(1)).slice(0, 12);
+    if (finalRelaxTracks.length > 0) {
       mixes.push({
-        id: 'mix_rahman_magic',
-        title: 'A.R. Rahman Signature Mix',
-        subtitle: 'Essential compositions, international scores & symphonies',
-        language: 'Multilingual',
-        coverUrl: composerTracks[0]?.artworkUrl || 'https://i.ytimg.com/vi/nPhnTTQkTG0/hqdefault.jpg',
-        trackCount: composerTracks.length,
-        tracks: composerTracks
-      });
-    }
-
-    // 4. High Energy & Workout Mix
-    const workoutTracks = tracks.filter((t) =>
-      t.title.toLowerCase().includes('naa ready') ||
-      t.title.toLowerCase().includes('zingaat') ||
-      t.title.toLowerCase().includes('naatu') ||
-      t.title.toLowerCase().includes('badass') ||
-      t.title.toLowerCase().includes('chaiyya') ||
-      t.title.toLowerCase().includes('blinding')
-    );
-    if (workoutTracks.length > 0) {
-      mixes.push({
-        id: 'mix_high_tempo_workout',
-        title: 'High Tempo Workout Mix',
-        subtitle: 'Fast-paced rhythmic anthems to fuel your workouts & focus',
-        language: 'Multilingual',
-        coverUrl: workoutTracks[0]?.artworkUrl || 'https://i.ytimg.com/vi/szvt1vD0Uug/hqdefault.jpg',
-        trackCount: workoutTracks.length,
-        tracks: workoutTracks
-      });
-    }
-
-    // 5. Relaxing Chill Mix
-    const relaxTracks = tracks.filter((t) =>
-      t.title.toLowerCase().includes('cherathukal') ||
-      t.title.toLowerCase().includes('annul') ||
-      t.title.toLowerCase().includes('pudhu vellai') ||
-      t.title.toLowerCase().includes('kaadhal') ||
-      t.title.toLowerCase().includes('viva la vida')
-    );
-    if (relaxTracks.length > 0) {
-      mixes.push({
-        id: 'mix_calm_relaxing',
+        id: `mix_${primaryLang.toLowerCase()}_relaxing`,
         title: 'Calm & Relaxing Mix',
         subtitle: 'Peaceful acoustic harmonies for relaxing and unwinding',
         language: primaryLang,
-        coverUrl: relaxTracks[0]?.artworkUrl || 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
-        trackCount: relaxTracks.length,
-        tracks: relaxTracks
+        coverUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+        trackCount: finalRelaxTracks.length,
+        tracks: finalRelaxTracks
+      });
+    }
+
+    // 4. Trending Mix
+    const trendingTracks = tracks
+      .filter((t) => (t.releaseYear && t.releaseYear >= 2021) || t.title.includes('Badass') || t.title.includes('Illuminati') || t.title.includes('Naatu') || t.title.includes('Chaleya'))
+      .slice(0, 12);
+    const finalTrendingTracks = (trendingTracks.length >= 3 ? trendingTracks : tracks).slice(0, 12);
+    if (finalTrendingTracks.length > 0) {
+      mixes.push({
+        id: `mix_${primaryLang.toLowerCase()}_trending`,
+        title: 'Trending Mix',
+        subtitle: `The hottest hits & chartbusters across ${languages.join(', ')}`,
+        language: primaryLang,
+        coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80',
+        trackCount: finalTrendingTracks.length,
+        tracks: finalTrendingTracks
+      });
+    }
+
+    // 5. New Discoveries
+    const playedSongIds = new Set((userSongStats || []).map((s) => s.songId));
+    const discoveryTracks = tracks.filter((t) => !playedSongIds.has(t.id));
+    const finalDiscoveryTracks = (discoveryTracks.length >= 3 ? discoveryTracks : tracks.slice().reverse()).slice(0, 12);
+    if (finalDiscoveryTracks.length > 0) {
+      mixes.push({
+        id: `mix_${userId}_new_discoveries`,
+        title: 'New Discoveries',
+        subtitle: 'Fresh additions and hidden gems outside your daily rotation',
+        language: primaryLang,
+        coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
+        trackCount: finalDiscoveryTracks.length,
+        tracks: finalDiscoveryTracks
+      });
+    }
+
+    // 6. Your Repeat Mix
+    const repeatTracks = tracks.filter((t) => {
+      const stat = userSongStats?.find((s) => s.songId === t.id);
+      return stat && (stat.replayCount > 0 || stat.isFavorite || stat.playCount >= 2);
+    });
+    const finalRepeatTracks = (repeatTracks.length >= 3 ? repeatTracks : tracks.slice(0, 10)).slice(0, 12);
+    if (finalRepeatTracks.length > 0) {
+      mixes.push({
+        id: `mix_${userId}_your_repeat`,
+        title: 'Your Repeat Mix',
+        subtitle: 'The tracks you keep coming back to time and time again',
+        language: primaryLang,
+        coverUrl: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80',
+        trackCount: finalRepeatTracks.length,
+        tracks: finalRepeatTracks
       });
     }
 
@@ -1759,6 +1961,14 @@ export class RecommendationEngineService {
     const excludeSet = new Set<string>((options.excludeIds || []).map((id) => id.trim()));
     if (options.songId) excludeSet.add(options.songId.trim());
 
+    // Exclude disliked, hidden, and not-interested items
+    const feedbacks = syncStore.getUserFeedback(userId);
+    feedbacks.forEach((f) => {
+      if (f.feedbackType === 'HIDE' || f.feedbackType === 'DISLIKE' || f.feedbackType === 'NOT_INTERESTED') {
+        excludeSet.add(f.targetId);
+      }
+    });
+
     // Helper for case-insensitive partial token matching
     const matchesAny = (candidateValue?: string, targetValue?: string): boolean => {
       if (!candidateValue || !targetValue) return false;
@@ -1826,8 +2036,35 @@ export class RecommendationEngineService {
       (preferences.preferredLanguages || []).map((l) => l.toLowerCase().trim())
     );
 
-    // 3. Filter candidates excluding already played IDs and reference song
-    const candidates = catalog.filter((t) => !excludeSet.has(t.id));
+    // 3. Filter candidates strictly by language and excluding already queued/played IDs.
+    // Pre-filtering: Songs without language metadata or outside user's selected languages are strictly excluded!
+    let candidates = catalog.filter((t) => {
+      if (excludeSet.has(t.id)) return false;
+      if (!t.language || !t.language.trim()) return false;
+      const tLang = (t.language || '').toLowerCase().trim();
+      if (preferredLanguages.size > 0 && !preferredLanguages.has(tLang)) return false;
+      if (targetLang && preferredLanguages.has(targetLang)) return tLang === targetLang;
+      return true;
+    });
+
+    // If targetLang candidates are fewer than needed, allow fallback from other preferred languages of the user,
+    // BUT NEVER unselected languages
+    if (candidates.length < limit && targetLang && preferredLanguages.size > 0) {
+      const fallback = catalog.filter(
+        (t) =>
+          !excludeSet.has(t.id) &&
+          Boolean(t.language && t.language.trim() && preferredLanguages.has(t.language.toLowerCase().trim())) &&
+          !candidates.some((c) => c.id === t.id)
+      );
+      candidates = [...candidates, ...fallback];
+    } else if (candidates.length === 0) {
+      candidates = catalog.filter((t) => {
+        if (excludeSet.has(t.id)) return false;
+        if (!t.language || !t.language.trim()) return false;
+        const tLang = (t.language || '').toLowerCase().trim();
+        return preferredLanguages.size > 0 ? preferredLanguages.has(tLang) : true;
+      });
+    }
 
     console.log(
       `[RecommendationEngine] Auto-queue generation started for "${options.songTitle || options.songId || 'unknown'}" by "${options.artist || 'Unknown'}" (Target Lang: "${targetLang || 'any'}", Composer: "${targetComposer || 'any'}")`
@@ -1837,12 +2074,12 @@ export class RecommendationEngineService {
     );
 
     // 4. Score candidates strictly according to Recommendation Priority:
-    // 1. Songs by the same artist
-    // 2. Songs by the same music director
+    // 1. Songs by the same artist / singers
+    // 2. Songs by the same music director / composer
     // 3. Songs from the same language
     // 4. Songs from the same movie or album
     // 5. Songs with similar genres and moods
-    // 6. Songs based on listening history
+    // 6. User taste profile and listening history (replays/favorites boosted, skips penalized)
     const scored = candidates.map((track) => {
       let score = 0;
       const trackLang = (track.language || '').toLowerCase().trim();
@@ -1873,10 +2110,10 @@ export class RecommendationEngineService {
         if (trackLang === targetLang) {
           score += 40;
         } else {
-          score -= 60; // Strong penalty for cross-language mismatch
+          score -= 80; // Strong penalty for cross-language mismatch
         }
       } else if (preferredLanguages.has(trackLang)) {
-        score += 25;
+        score += 30;
       }
 
       // Priority 4: Songs from the same movie or album
@@ -1894,17 +2131,23 @@ export class RecommendationEngineService {
 
       // Priority 6: Listening history and taste profile
       if (trackComposer && favouriteComposers.has(trackComposer)) {
-        score += 15;
+        score += 20;
       }
       if (trackArtist && (favouriteSingers.has(trackArtist) || favouriteArtists.has(trackArtist))) {
-        score += 15;
+        score += 20;
       }
 
       const stat = userSongStats.find((s) => s.songId === track.id || eq(s.songName, track.title));
       if (stat) {
+        if (stat.isFavorite) score += 25;
+        if (stat.replayCount > 0) score += Math.min(20, stat.replayCount * 10);
         if (stat.playCount > 0) score += Math.min(15, stat.playCount * 3);
-        if (stat.isFavorite) score += 15;
-        if (stat.skipCount > 0) score -= Math.min(20, stat.skipCount * 5);
+        if (stat.skipCount >= 3) {
+          score -= 60; // Strongly penalize repeatedly skipped songs (skip count >= 3)
+        } else if (stat.skipCount === 2) {
+          score -= 15;
+        }
+        // Notice: single skip (skipCount === 1) is NOT penalized! A single skip is NOT a dislike.
       }
 
       return { track, score };
@@ -1913,11 +2156,10 @@ export class RecommendationEngineService {
     // 5. Variety and diversity balancing:
     scored.sort((a, b) => b.score - a.score);
 
-    // Allow multiple songs from top artist/composer (up to 4) while ensuring multi-artist diversity
-    const maxPerArtist = Math.max(3, Math.floor(limit / 5));
+    // Enforce artist variety constraint: Max 2 songs per artist in the auto-queue refill
+    const maxPerArtist = 2;
     const artistCounts = new Map<string, number>();
     const selected: UnifiedTrack[] = [];
-    const remaining: UnifiedTrack[] = [];
 
     for (const item of scored) {
       const artKey = item.track.composer || item.track.artist || 'unknown';
@@ -1926,14 +2168,7 @@ export class RecommendationEngineService {
         selected.push(item.track);
         artistCounts.set(artKey, count + 1);
         if (selected.length >= limit) break;
-      } else {
-        remaining.push(item.track);
       }
-    }
-
-    // Fill remaining up to requested limit from remaining scored candidates
-    while (selected.length < limit && remaining.length > 0) {
-      selected.push(remaining.shift()!);
     }
 
     console.log(
@@ -1941,6 +2176,102 @@ export class RecommendationEngineService {
     );
 
     return selected;
+  }
+
+  /**
+   * Generates intelligent music discovery categories with support for exploratory language filtering
+   * without mutating the authenticated user's saved preferences profile.
+   */
+  static async getDiscoverFeed(
+    userId: string,
+    languageOverride?: string
+  ): Promise<DiscoverFeedResponse> {
+    const preferences: UserMusicPreference = syncStore.getUserPreferences(userId);
+    const targetLanguages = languageOverride && languageOverride !== 'ALL'
+      ? [languageOverride]
+      : preferences.preferredLanguages.length > 0
+      ? preferences.preferredLanguages
+      : ['Tamil', 'Hindi', 'Telugu', 'Malayalam'];
+
+    const masterCatalog = this.getMasterCatalog();
+    const langSet = new Set(targetLanguages.map((l) => l.toLowerCase().trim()));
+    const availableTracks = masterCatalog.filter(
+      (t) =>
+        t.language &&
+        langSet.has(t.language.toLowerCase().trim()) &&
+        Boolean(t.videoId || t.fullAudioUrl || t.previewUrl || t.isPlayableDirectly)
+    );
+
+    // 1. Recommended Artists & Similar Artists
+    const artistsInLang = queryArtistsCatalog({ languages: targetLanguages });
+    const recommendedArtists = (
+      await Promise.all(
+        artistsInLang.slice(0, 8).map((a) => this.getArtistDetailByName(userId, a.name))
+      )
+    ).filter((a): a is ArtistRecommendationCard => a !== null);
+
+    const similarArtists = (
+      await Promise.all(
+        artistsInLang.slice(8, 16).map((a) => this.getArtistDetailByName(userId, a.name))
+      )
+    ).filter((a): a is ArtistRecommendationCard => a !== null);
+
+    // 2. Popular Songs
+    const popularSongs = availableTracks.slice().sort((a, b) => (b.releaseYear || 2020) - (a.releaseYear || 2020)).slice(0, 16);
+
+    // 3. Trending Music
+    const trendingMusic = availableTracks.filter((t) => (t.releaseYear || 2020) >= 2021).slice(0, 16);
+
+    // 4. New Releases
+    const newReleases = availableTracks.filter((t) => (t.releaseYear || 2020) >= 2022).slice(0, 16);
+
+    // 5. Mood Categories
+    const moodCategories = ALL_12_MOOD_SPECS.map((spec) => {
+      const tracks = availableTracks.filter(
+        (t) => spec.preferredTitles.some((pt) => eq(pt, t.title)) || spec.keywords.test(t.title)
+      );
+      return {
+        id: spec.id,
+        mood: spec.mood,
+        title: spec.title,
+        description: spec.description,
+        artworkUrl: spec.artworkUrl,
+        accentColor: spec.accentColor,
+        trackCount: tracks.length,
+        tracks: tracks.slice(0, 10)
+      };
+    });
+
+    // 6. Genre Categories
+    const genres = ['Melody', 'EDM', 'Pop', 'Folk', 'Devotional', 'Soundtrack'];
+    const genreCategories = genres.map((g) => {
+      const tracks = availableTracks.filter((t) => eq(t.genre, g));
+      return {
+        id: `genre_${g.toLowerCase()}`,
+        name: `${g} Hits`,
+        trackCount: tracks.length,
+        tracks: tracks.slice(0, 10)
+      };
+    }).filter((gc) => gc.tracks.length > 0);
+
+    // 7. Music Director Collections
+    const directorNames = Array.from(new Set(availableTracks.map((t) => t.composer).filter(Boolean))).slice(0, 8);
+    const musicDirectorCollections = directorNames.map((dir) => ({
+      director: dir!,
+      tracks: availableTracks.filter((t) => eq(t.composer, dir)).slice(0, 10)
+    })).filter((c) => c.tracks.length > 0);
+
+    return {
+      preferredLanguages: targetLanguages,
+      recommendedArtists,
+      similarArtists,
+      popularSongs,
+      trendingMusic,
+      newReleases,
+      moodCategories,
+      genreCategories,
+      musicDirectorCollections
+    };
   }
 
   /**

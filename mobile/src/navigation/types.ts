@@ -17,8 +17,10 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   HomeTab: undefined;
-  SearchTab: undefined;
+  DiscoverTab: undefined;
   LibraryTab: undefined;
-  DownloadsTab: undefined;
+  SchedulerTab: undefined;
   ProfileTab: undefined;
+  SearchTab?: undefined;
+  DownloadsTab?: undefined;
 };

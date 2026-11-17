@@ -267,7 +267,7 @@ export const LibraryScreen: React.FC = () => {
                       {pl.name}
                     </Text>
                     <Text style={styles.playlistCardCount}>
-                      {pl.tracks.length} track{pl.tracks.length === 1 ? '' : 's'}
+                      {pl.tracks?.length || pl.trackIds?.length || 0} song{(pl.tracks?.length || pl.trackIds?.length || 0) === 1 ? '' : 's'}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -321,12 +321,23 @@ export const LibraryScreen: React.FC = () => {
             {favoriteTracks.length > 0 && (
               <View style={styles.favoritesHeader}>
                 <Text style={styles.listHeader}>Favorites ({favoriteTracks.length})</Text>
-                <TouchableOpacity
-                  style={styles.playAllBtn}
-                  onPress={() => playTrack(favoriteTracks[0], favoriteTracks)}
-                >
-                  <Text style={styles.playAllBtnText}>▶ Play All</Text>
-                </TouchableOpacity>
+                <View style={styles.headerActionRow}>
+                  <TouchableOpacity
+                    style={styles.shuffleBtn}
+                    onPress={() => {
+                      const shuffled = [...favoriteTracks].sort(() => Math.random() - 0.5);
+                      playTrack(shuffled[0], shuffled);
+                    }}
+                  >
+                    <Text style={styles.shuffleBtnText}>Shuffle</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.playAllBtn}
+                    onPress={() => playTrack(favoriteTracks[0], favoriteTracks)}
+                  >
+                    <Text style={styles.playAllBtnText}>▶ Play All</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
@@ -346,6 +357,19 @@ export const LibraryScreen: React.FC = () => {
                 <Text style={styles.emptySubtitle}>
                   Tap the heart icon (♡) on any song across Home, Discover, or Now Playing to save your favorites here.
                 </Text>
+                <TouchableOpacity
+                  style={styles.discoverBtn}
+                  onPress={() => {
+                    try {
+                      (navigation as any).navigate('DiscoverTab');
+                    } catch {
+                      (navigation as any).navigate('MainTabs', { screen: 'DiscoverTab' });
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.discoverBtnText}>Add Songs / Discover Music</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -689,6 +713,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.md
+  },
+  headerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm
+  },
+  shuffleBtn: {
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radius.control
+  },
+  shuffleBtnText: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: Colors.textPrimary
+  },
+  discoverBtn: {
+    backgroundColor: Colors.accent,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.control,
+    marginTop: Spacing.lg
+  },
+  discoverBtnText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#000000'
   },
   guestPromptCard: {
     backgroundColor: Colors.surface,
