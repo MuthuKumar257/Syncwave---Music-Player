@@ -152,15 +152,36 @@ CREATE TABLE IF NOT EXISTS listening_events (
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Recommendation Feedback (Explicit Likes, Dislikes, Hides & Not Interested)
+-- Recommendation Feedback (Explicit Likes, Dislikes, Hides, Not Interested, More Like This, Less Like This)
 CREATE TABLE IF NOT EXISTS recommendation_feedback (
     id BIGSERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     target_id VARCHAR(100) NOT NULL,
     target_type VARCHAR(30) NOT NULL, -- 'SONG', 'SOUNDTRACK', 'ARTIST', 'COMPOSER'
-    feedback_type VARCHAR(20) NOT NULL, -- 'LIKE', 'DISLIKE', 'HIDE', 'NOT_INTERESTED'
+    feedback_type VARCHAR(30) NOT NULL, -- 'LIKE', 'DISLIKE', 'HIDE', 'NOT_INTERESTED', 'MORE_LIKE_THIS', 'LESS_LIKE_THIS'
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (user_id, target_id)
+);
+
+-- Recommendation Impressions (Anti-Stagnation & Freshness Tracking)
+CREATE TABLE IF NOT EXISTS recommendation_impressions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    song_id VARCHAR(100) NOT NULL,
+    section_name VARCHAR(100) NOT NULL,
+    impressed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Configurable Recommendation Weights Settings
+CREATE TABLE IF NOT EXISTS recommendation_weights_config (
+    id VARCHAR(50) PRIMARY KEY DEFAULT 'default',
+    artist_weight FLOAT DEFAULT 0.20,
+    music_director_weight FLOAT DEFAULT 0.15,
+    genre_mood_weight FLOAT DEFAULT 0.15,
+    listening_behavior_weight FLOAT DEFAULT 0.25,
+    favorites_similarity_weight FLOAT DEFAULT 0.15,
+    discovery_freshness_weight FLOAT DEFAULT 0.10,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Generated Daily Mixes
@@ -416,6 +437,20 @@ DO $$ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'languages' AND policyname = 'Public read for languages') THEN
         CREATE POLICY "Public read for languages" ON languages FOR SELECT USING (true);
+    END IF;
+END $$;
+
+-- 11. Recommendation Impressions and Configurable Weights RLS
+ALTER TABLE recommendation_impressions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recommendation_weights_config ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'recommendation_impressions' AND policyname = 'Users can manage own impressions') THEN
+        CREATE POLICY "Users can manage own impressions" ON recommendation_impressions
+            FOR ALL USING (auth.uid() = user_id OR user_id::text = current_setting('request.jwt.claim.sub', true));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'recommendation_weights_config' AND policyname = 'Public read for weights config') THEN
+        CREATE POLICY "Public read for weights config" ON recommendation_weights_config FOR SELECT USING (true);
     END IF;
 END $$;
 

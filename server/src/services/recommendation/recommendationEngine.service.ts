@@ -4,7 +4,8 @@ import {
   ListeningEventRecord,
   RecommendationFeedbackRecord,
   DailyMixRecord,
-  SongListeningStat
+  SongListeningStat,
+  RecommendationWeightsConfig
 } from '../../db/store';
 import {
   KNOWN_INDIAN_MOVIES,
@@ -229,25 +230,29 @@ export interface DailyMixItem {
   tracks: UnifiedTrack[];
 }
 
-export interface RecommendationWeightsConfig {
-  languageMatch: number;        // 0.20 (20%)
-  artistPreference: number;     // 0.20 (20%)
-  musicDirector: number;        // 0.15 (15%)
-  listeningHistory: number;     // 0.15 (15%)
-  genreAndMood: number;         // 0.10 (10%)
-  songSimilarity: number;       // 0.10 (10%)
-  discoveryPopularity: number;  // 0.10 (10%)
-}
+export { RecommendationWeightsConfig } from '../../db/store';
 
 export const DEFAULT_RECOMMENDATION_WEIGHTS: RecommendationWeightsConfig = {
-  languageMatch: 0.20,
   artistPreference: 0.20,
   musicDirector: 0.15,
-  listeningHistory: 0.15,
-  genreAndMood: 0.10,
-  songSimilarity: 0.10,
+  genreAndMood: 0.15,
+  listeningBehavior: 0.25,
+  favoritesSimilarity: 0.15,
+  discoveryFreshness: 0.10,
+  languageMatch: 0.0,
+  listeningHistory: 0.25,
+  songSimilarity: 0.15,
   discoveryPopularity: 0.10
 };
+
+interface FeedCacheEntry {
+  feed: PersonalizedFeedResponse;
+  timestamp: number;
+  preferenceVersion: number;
+}
+
+const userFeedCache = new Map<string, FeedCacheEntry>();
+const FEED_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export interface PersonalizedFeedResponse {
   greeting: string;
@@ -258,8 +263,28 @@ export interface PersonalizedFeedResponse {
   requiresLanguageSelection?: boolean;
   generatedAt?: string;
 
-  // 15 Explicit Dynamic Home Sections:
+  // 10 Explicit Dynamic Home Sections:
   madeForYou: UnifiedTrack[];
+  basedOnListeningHistory: {
+    basedOn: string;
+    tracks: UnifiedTrack[];
+  };
+  becauseYouLikeThisArtist: {
+    artist: string;
+    tracks: UnifiedTrack[];
+  };
+  similarToFavouriteSongs: UnifiedTrack[];
+  recentlyAdded: UnifiedTrack[];
+  trendingInLanguages: UnifiedTrack[];
+  discoverNewArtists: ArtistRecommendationCard[];
+  yourFavouriteMusicDirectors: Array<{
+    director: string;
+    tracks: UnifiedTrack[];
+  }>;
+  recommendedMoods: MoodPlaylistCard[];
+  continueListening: UnifiedTrack[];
+
+  // Dynamic / extended sections:
   dailyMixes: DailyMixItem[];
   becauseYouListenedTo: {
     basedOn: string;
@@ -269,21 +294,14 @@ export interface PersonalizedFeedResponse {
   basedOnFavouriteDirectors: UnifiedTrack[];
   recentlyPlayed: UnifiedTrack[];
   favouriteSongs: UnifiedTrack[];
-  similarToFavouriteSongs: UnifiedTrack[];
-  trendingInLanguages: UnifiedTrack[];
   newReleases: UnifiedTrack[];
   discoverSomethingNew: UnifiedTrack[];
   yourMoodMix: MoodPlaylistCard[];
-  continueListening: UnifiedTrack[];
   mostPlayedArtists: ArtistRecommendationCard[];
   songsYouMayLike: UnifiedTrack[];
 
   // Backward-compatible fields & aliases:
   recommendedForYou: UnifiedTrack[];
-  basedOnListeningHistory: {
-    basedOn: string;
-    tracks: UnifiedTrack[];
-  };
   moreFromFavouriteArtists: UnifiedTrack[];
   sameMusicDirector: {
     director: string;
@@ -605,23 +623,28 @@ export class RecommendationEngineService {
     const userPlaylists = syncStore.getUserPlaylists(userId);
     const playlistSongIds = new Set<string>(userPlaylists.flatMap((p) => p.songIds));
     const seed = context?.refreshSeed || '';
+    const isGuest = userId === 'guest_default_user';
 
-    // Collect negative signals: HIDE, DISLIKE, NOT_INTERESTED
+    // Collect signals from user feedback: HIDE, DISLIKE, NOT_INTERESTED, LIKE, MORE_LIKE_THIS, LESS_LIKE_THIS
     const hiddenSet = new Set<string>();
     const hiddenArtists = new Set<string>();
+    const likedSet = new Set<string>();
+    const moreLikeThisSet = new Set<string>();
+    const lessLikeThisSet = new Set<string>();
+
     feedbacks.forEach((f) => {
+      const tid = (f.targetId || '').toLowerCase().trim();
       if (f.feedbackType === 'HIDE' || f.feedbackType === 'DISLIKE' || f.feedbackType === 'NOT_INTERESTED') {
         hiddenSet.add(f.targetId);
         if (f.targetType === 'ARTIST' || f.targetType === 'COMPOSER') {
           hiddenArtists.add(normalizeArtistToken(f.targetId));
         }
-      }
-    });
-
-    const likedSet = new Set<string>();
-    feedbacks.forEach((f) => {
-      if (f.feedbackType === 'LIKE') {
+      } else if (f.feedbackType === 'LIKE') {
         likedSet.add(f.targetId);
+      } else if (f.feedbackType === 'MORE_LIKE_THIS') {
+        moreLikeThisSet.add(tid);
+      } else if (f.feedbackType === 'LESS_LIKE_THIS') {
+        lessLikeThisSet.add(tid);
       }
     });
 
@@ -671,26 +694,33 @@ export class RecommendationEngineService {
         requiresLanguageSelection: true,
         generatedAt: new Date().toISOString(),
 
-        // 15 Explicit Dynamic Home Sections:
+        // 10 Explicit Dynamic Home Sections:
         madeForYou: [],
+        basedOnListeningHistory: { basedOn: '', tracks: [] },
+        becauseYouLikeThisArtist: { artist: '', tracks: [] },
+        similarToFavouriteSongs: [],
+        recentlyAdded: [],
+        trendingInLanguages: [],
+        discoverNewArtists: [],
+        yourFavouriteMusicDirectors: [],
+        recommendedMoods: [],
+        continueListening: [],
+
+        // Dynamic / extended sections:
         dailyMixes: [],
         becauseYouListenedTo: { basedOn: '', tracks: [] },
         basedOnFavouriteArtists: [],
         basedOnFavouriteDirectors: [],
         recentlyPlayed: [],
         favouriteSongs: [],
-        similarToFavouriteSongs: [],
-        trendingInLanguages: [],
         newReleases: [],
         discoverSomethingNew: [],
         yourMoodMix: [],
-        continueListening: [],
         mostPlayedArtists: [],
         songsYouMayLike: [],
 
         // Backward-compatible fields:
         recommendedForYou: [],
-        basedOnListeningHistory: { basedOn: '', tracks: [] },
         moreFromFavouriteArtists: [],
         sameMusicDirector: { director: '', tracks: [] },
         similarSongs: [],
@@ -708,6 +738,16 @@ export class RecommendationEngineService {
         timeBasedPicks: { contextName: timeInfo.title, description: timeInfo.desc, tracks: [] },
         discoverNew: []
       };
+    }
+
+    // Cache lookup: versioned cache invalidation ensures immediate updates
+    const userVersion = syncStore.getUserStateVersion(userId);
+    const cacheKey = `${userId}:${activeLanguages.slice().sort().join(',')}:${context?.languageOverride || ''}:${timeOfDay}:v${userVersion}`;
+    if (!seed && !isGuest) {
+      const cached = userFeedCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < FEED_CACHE_TTL_MS)) {
+        return cached.feed;
+      }
     }
 
     const masterCatalog = this.getMasterCatalog();
@@ -804,15 +844,23 @@ export class RecommendationEngineService {
       playHistory.slice(0, 5).map((ph) => ph.songId)
     );
 
-    // Calculate score for each candidate track using normalized 7-factor weighted scoring model:
-    // 1. Language Preference: 20%
-    // 2. Artist Preference: 20%
-    // 3. Music Director Preference: 15%
-    // 4. Listening History & Behaviour: 15%
-    // 5. Genre & Mood Preference: 10%
-    // 6. Song Similarity: 10%
-    // 7. Discovery & Popularity: 10%
+    // Track recently impressed song IDs for freshness & discovery promotion
     const now = Date.now();
+    const userImpressions = !isGuest ? syncStore.getUserImpressions(userId, 100) : [];
+    const recentImpressionIds = new Set(
+      userImpressions
+        .filter((i) => now - new Date(i.timestamp).getTime() < 15 * 60 * 1000)
+        .map((i) => i.songId)
+    );
+
+    // Calculate score for each candidate track using normalized 6-factor hybrid recommendation model:
+    // Mandatory Language Eligibility: Pre-filtered (not a score)
+    // 1. Artist Preference: 20%
+    // 2. Music Director Preference: 15%
+    // 3. Genre & Mood Preference: 15%
+    // 4. Listening Behaviour & History: 25%
+    // 5. Similarity to Favourites: 15%
+    // 6. Discovery & Freshness: 10%
     const favArtistsSet = new Set([
       ...(preferences.favouriteArtists || []),
       ...(preferences.favouriteSingers || [])
@@ -825,22 +873,16 @@ export class RecommendationEngineService {
     const prefMovies = preferences.favouriteMovies || [];
     const hasHistory = userSongStats.length > 0 || playHistory.length > 0;
 
-    const weights = DEFAULT_RECOMMENDATION_WEIGHTS;
+    const weights = syncStore.getRecommendationWeights();
 
     const scoredTracks = availableTracks.map((track) => {
       let totalWeightedScore = 0;
       let applicableWeight = 0;
       let reason = '';
 
-      // 1. Selected Language Match: 20%
-      applicableWeight += weights.languageMatch;
-      if (track.language && activeLanguages.some((l) => eq(l, track.language))) {
-        totalWeightedScore += weights.languageMatch * 1.0;
-        if (!reason) reason = `Popular in ${track.language}`;
-      }
-
-      // 2. Favourite Singers and Artists: 20%
-      applicableWeight += weights.artistPreference;
+      // 1. Favourite Singers and Artists: 20%
+      const wArtist = weights.artistPreference ?? 0.20;
+      applicableWeight += wArtist;
       const trackArtistLower = (track.artist || '').toLowerCase();
       const trackSingersLower = (track.singers || []).map((s) => s.toLowerCase());
       let artistScore = 0.3; // Baseline score
@@ -856,10 +898,11 @@ export class RecommendationEngineService {
       } else if (singerWeights.has(trackArtistLower)) {
         artistScore = Math.min(1.0, Math.max(0.2, (singerWeights.get(trackArtistLower) || 0) / 20));
       }
-      totalWeightedScore += weights.artistPreference * artistScore;
+      totalWeightedScore += wArtist * artistScore;
 
-      // 3. Favourite Music Directors: 15%
-      applicableWeight += weights.musicDirector;
+      // 2. Favourite Music Directors: 15%
+      const wDir = weights.musicDirector ?? 0.15;
+      applicableWeight += wDir;
       const composerLower = (track.composer || track.artist || '').toLowerCase();
       let dirScore = 0.3;
       if (favDirectorsSet.size > 0) {
@@ -875,10 +918,11 @@ export class RecommendationEngineService {
         const raw = directorWeights.get(composerLower) || 0;
         dirScore = Math.min(1.0, Math.max(0.2, raw / 20));
       }
-      totalWeightedScore += weights.musicDirector * dirScore;
+      totalWeightedScore += wDir * dirScore;
 
-      // 4. Preferred Genres and Moods: 10%
-      applicableWeight += weights.genreAndMood;
+      // 3. Preferred Genres and Moods: 15%
+      const wGm = weights.genreAndMood ?? 0.15;
+      applicableWeight += wGm;
       let gmScore = 0.4;
       if (prefGenres.length > 0 || prefMoods.length > 0) {
         let matchScore = 0;
@@ -890,10 +934,11 @@ export class RecommendationEngineService {
         }
         gmScore = Math.min(1.0, matchScore);
       }
-      totalWeightedScore += weights.genreAndMood * gmScore;
+      totalWeightedScore += wGm * gmScore;
 
-      // 5. Listening Behaviour and History: 15%
-      applicableWeight += weights.listeningHistory;
+      // 4. Listening Behaviour and History: 25%
+      const wHist = weights.listeningBehavior ?? weights.listeningHistory ?? 0.25;
+      applicableWeight += wHist;
       const stat = songStatMap.get(track.id);
       let histScore = 0.4;
       if (stat) {
@@ -919,10 +964,11 @@ export class RecommendationEngineService {
           if (!reason) reason = `Based on your recent listening`;
         }
       }
-      totalWeightedScore += weights.listeningHistory * histScore;
+      totalWeightedScore += wHist * histScore;
 
-      // 6. Song Similarity: 10%
-      applicableWeight += weights.songSimilarity;
+      // 5. Similarity to Favourites: 15%
+      const wFav = weights.favoritesSimilarity ?? weights.songSimilarity ?? 0.15;
+      applicableWeight += wFav;
       let simScore = 0.4;
       if (likedSet.has(track.id) || playlistSongIds.has(track.id)) {
         simScore = 1.0;
@@ -936,33 +982,49 @@ export class RecommendationEngineService {
         if (matchingDirector && matchingSinger) simScore = 0.85;
         else if (matchingDirector || matchingSinger) simScore = 0.7;
       }
-      totalWeightedScore += weights.songSimilarity * simScore;
+      totalWeightedScore += wFav * simScore;
 
-      // 7. Discovery & Popularity: 10%
-      applicableWeight += weights.discoveryPopularity;
+      // 6. Discovery & Freshness: 10%
+      const wDisc = weights.discoveryFreshness ?? weights.discoveryPopularity ?? 0.10;
+      applicableWeight += wDisc;
       let discScore = 0.5;
       const isFreshArtist = !favArtistsSet.has(trackArtistLower) && !(playHistory || []).some((h) => eq(h.artistName, track.artist));
       discScore = isFreshArtist ? 0.8 : 0.5;
       if (track.releaseYear && track.releaseYear >= 2022) {
         discScore = Math.min(1.0, discScore + 0.2);
       }
+      // Freshness deduction if recently impressed
+      if (recentImpressionIds.has(track.id)) {
+        discScore = Math.max(0.1, discScore - 0.3);
+      }
       if (seed) {
         discScore = (discScore + ((deterministicSeedHash(`${track.id}:${seed}`) % 5) / 10)) / 1.5;
       }
-      totalWeightedScore += weights.discoveryPopularity * Math.min(1.0, discScore);
+      totalWeightedScore += wDisc * Math.min(1.0, discScore);
 
       // Normalization (Score scaled to 0-100)
       let score = applicableWeight > 0 ? (totalWeightedScore / applicableWeight) * 100 : 50;
+
+      // Explicit fine-tuning feedback: MORE_LIKE_THIS / LESS_LIKE_THIS
+      const trId = track.id.toLowerCase();
+      if (moreLikeThisSet.has(trId) || moreLikeThisSet.has(trackArtistLower) || moreLikeThisSet.has(composerLower)) {
+        score = Math.min(100, score + 25);
+      }
+      if (lessLikeThisSet.has(trId) || lessLikeThisSet.has(trackArtistLower) || lessLikeThisSet.has(composerLower)) {
+        score = Math.max(0, score - 30);
+      }
 
       // Negative signal: Repeatedly skipped songs (skip count >= 3) are heavily penalized (75% penalty multiplier)
       // Note: A single skip (skip count === 1) is NOT penalized with this penalty multiplier.
       if (stat && stat.skipCount >= 3) {
         score *= 0.25;
+      } else if (stat && stat.skipCount === 2) {
+        score *= 0.85;
       }
 
       const enrichedTrack: UnifiedTrack = {
         ...track,
-        recommendationReason: reason || `Recommended for you`
+        recommendationReason: reason || (track.language ? `Popular in ${track.language}` : `Recommended for you`)
       };
 
       return { track: enrichedTrack, score };
@@ -977,14 +1039,14 @@ export class RecommendationEngineService {
 
     // 1. Recently Played (from userSongStats / playHistory) - strictly empty if user hasn't played songs
     let recentlyPlayed: UnifiedTrack[] = [];
-    if (userSongStats.length > 0) {
+    if (!isGuest && userSongStats.length > 0) {
       for (const stat of userSongStats) {
         const found = availableTracks.find((t) => t.id === stat.songId || eq(t.title, stat.songName));
         if (found && !recentlyPlayed.some((p) => p.id === found.id)) {
           recentlyPlayed.push(found);
         }
       }
-    } else if (playHistory.length > 0) {
+    } else if (!isGuest && playHistory.length > 0) {
       for (const ph of playHistory) {
         const found = availableTracks.find((t) => t.id === ph.songId || eq(t.title, ph.songTitle));
         if (found && !recentlyPlayed.some((p) => p.id === found.id)) {
@@ -994,33 +1056,46 @@ export class RecommendationEngineService {
     }
     recentlyPlayed = recentlyPlayed.slice(0, 10);
 
-    // 2. Continue Listening (uncompleted tracks or session resumes) - strictly empty if no listening session
+    // 2. Continue Listening (uncompleted tracks or session resumes) - strictly empty if no listening session or guest
     let continueListening: UnifiedTrack[] = [];
-    const continueCandidates = userSongStats.filter(
-      (s) => s.totalListeningDurationMs > 20000 && s.skipCount === 0
-    );
-    for (const cand of continueCandidates) {
-      const found = availableTracks.find((t) => t.id === cand.songId || eq(t.title, cand.songName));
-      if (found && !continueListening.some((c) => c.id === found.id)) {
-        continueListening.push(found);
+    if (!isGuest) {
+      const continueCandidates = userSongStats.filter(
+        (s) => s.totalListeningDurationMs > 20000 && s.skipCount === 0
+      );
+      for (const cand of continueCandidates) {
+        const found = availableTracks.find((t) => t.id === cand.songId || eq(t.title, cand.songName));
+        if (found && !continueListening.some((c) => c.id === found.id)) {
+          continueListening.push(found);
+        }
       }
     }
     continueListening = continueListening.slice(0, 6);
 
-    // Diversity-balanced Made For You list (prevents stacking >2 songs from same artist in top slots)
+    // Diversity-balanced Made For You list (Anti-monopoly: max 2 songs per artist in top slots)
     const diversifiedMadeForYou: UnifiedTrack[] = [];
     const overflowTracks: UnifiedTrack[] = [];
     const composerCount = new Map<string, number>();
     for (const item of scoredTracks) {
       const compKey = normalizeArtistToken(item.track.composer || item.track.artist);
       const count = composerCount.get(compKey) || 0;
-      if (count < 3) {
+      if (count < 2) {
         diversifiedMadeForYou.push(item.track);
         composerCount.set(compKey, count + 1);
       } else {
         overflowTracks.push(item.track);
       }
       if (diversifiedMadeForYou.length >= 16) break;
+    }
+    for (const extra of overflowTracks) {
+      if (diversifiedMadeForYou.length >= 18) break;
+      diversifiedMadeForYou.push(extra);
+    }
+
+    // Record impressions for top recommendations to maintain freshness in future cycles
+    if (!isGuest) {
+      for (const track of diversifiedMadeForYou.slice(0, 10)) {
+        syncStore.recordImpression(userId, track.id, 'madeForYou');
+      }
     }
     for (const extra of overflowTracks) {
       if (diversifiedMadeForYou.length >= 18) break;
@@ -1391,17 +1466,17 @@ export class RecommendationEngineService {
     }).filter((s) => s.recommended.length > 0 || s.soundtracks.length > 0);
 
     // 7. Your Favourite Songs (Explicitly favorited / liked tracks)
-    const userFavorites = syncStore.getUserFavorites(userId);
+    const userFavorites = !isGuest ? syncStore.getUserFavorites(userId) : new Set<string>();
     const favoriteSongIds = new Set<string>([
       ...userFavorites,
       ...userSongStats.filter((s) => s.isFavorite).map((s) => s.songId),
       ...Array.from(likedSet)
     ]);
-    const favouriteSongs: UnifiedTrack[] = availableTracks.filter((t) => favoriteSongIds.has(t.id));
+    const favouriteSongs: UnifiedTrack[] = isGuest ? [] : availableTracks.filter((t) => favoriteSongIds.has(t.id));
 
     // 8. Similar to Your Favourite Songs
     let similarToFavouriteSongs: UnifiedTrack[] = [];
-    if (favouriteSongs.length > 0) {
+    if (!isGuest && favouriteSongs.length > 0) {
       const favComposers = new Set(favouriteSongs.map((t) => normalizeArtistToken(t.composer || t.artist)).filter(Boolean));
       const favSingers = new Set(favouriteSongs.flatMap((t) => (t.singers || []).map((s) => normalizeArtistToken(s))));
       const favMovies = new Set(favouriteSongs.map((t) => t.movieName).filter(Boolean));
@@ -1419,7 +1494,7 @@ export class RecommendationEngineService {
         .sort((a, b) => b.sim - a.sim)
         .map((s) => s.track);
     }
-    if (similarToFavouriteSongs.length === 0) {
+    if (!isGuest && similarToFavouriteSongs.length === 0) {
       similarToFavouriteSongs = similarSongs;
     }
 
@@ -1478,8 +1553,8 @@ export class RecommendationEngineService {
       .filter((t) => !topMadeForYouIds.has(t.id))
       .slice(0, 16);
 
-    // Daily Mixes
-    const dailyMixes = this.generateDailyMixes(
+    // Daily Mixes (strictly empty in guest mode)
+    const dailyMixes = isGuest ? [] : this.generateDailyMixes(
       userId,
       availableTracks,
       activeLanguages,
@@ -1493,7 +1568,27 @@ export class RecommendationEngineService {
       .filter((t) => activeLanguages.some((l) => eq(l, t.language)))
       .slice(0, 10);
 
-    return {
+    const primaryFavArtist =
+      (!isGuest && (preferences.favouriteArtists?.[0] || preferences.favouriteSingers?.[0])) ||
+      topDirectorOrSinger ||
+      '';
+
+    const becauseYouLikeThisArtistTracks = (
+      primaryFavArtist && !isGuest
+        ? availableTracks.filter((t) => artistMatches(t.artist, primaryFavArtist) || artistMatches(t.composer, primaryFavArtist)).slice(0, 12)
+        : []
+    );
+
+    const becauseYouLikeThisArtist = {
+      artist: isGuest ? '' : primaryFavArtist,
+      tracks: isGuest ? [] : becauseYouLikeThisArtistTracks
+    };
+
+    const recentlyAdded = newReleases;
+    const discoverNewArtists = favouriteArtists.slice(0, 6);
+    const recommendedMoods = moodPlaylists;
+
+    const finalResult: PersonalizedFeedResponse = {
       greeting: timeInfo.greeting,
       timeOfDay,
       contextTitle: timeInfo.title,
@@ -1501,32 +1596,39 @@ export class RecommendationEngineService {
       preferredLanguages: activeLanguages,
       generatedAt: new Date().toISOString(),
 
-      // 15 Explicit Dynamic Home Sections:
+      // 10 Explicit Dynamic Home Sections:
       madeForYou,
+      basedOnListeningHistory: {
+        basedOn: isGuest ? '' : topDirectorOrSinger,
+        tracks: isGuest ? [] : basedOnListeningHistoryTracks
+      },
+      becauseYouLikeThisArtist,
+      similarToFavouriteSongs: isGuest ? [] : similarToFavouriteSongs,
+      recentlyAdded,
+      trendingInLanguages,
+      discoverNewArtists,
+      yourFavouriteMusicDirectors: favouriteMusicDirectors,
+      recommendedMoods,
+      continueListening: isGuest ? [] : continueListening,
+
+      // Extended / dynamic sections:
       dailyMixes,
       becauseYouListenedTo: {
-        basedOn: topDirectorOrSinger,
-        tracks: basedOnListeningHistoryTracks
+        basedOn: isGuest ? '' : topDirectorOrSinger,
+        tracks: isGuest ? [] : basedOnListeningHistoryTracks
       },
       basedOnFavouriteArtists,
       basedOnFavouriteDirectors,
-      recentlyPlayed,
+      recentlyPlayed: isGuest ? [] : recentlyPlayed,
       favouriteSongs,
-      similarToFavouriteSongs,
-      trendingInLanguages,
       newReleases,
       discoverSomethingNew,
       yourMoodMix,
-      continueListening,
       mostPlayedArtists,
       songsYouMayLike,
 
       // Backward-compatible fields:
       recommendedForYou,
-      basedOnListeningHistory: {
-        basedOn: topDirectorOrSinger,
-        tracks: basedOnListeningHistoryTracks
-      },
       moreFromFavouriteArtists,
       sameMusicDirector,
       similarSongs,
@@ -1554,6 +1656,32 @@ export class RecommendationEngineService {
       },
       discoverNew: discoverNewMusic
     };
+
+    // Store in versioned cache for non-guest users
+    if (!isGuest && !seed) {
+      userFeedCache.set(cacheKey, {
+        feed: finalResult,
+        timestamp: Date.now(),
+        preferenceVersion: userVersion
+      });
+    }
+
+    return finalResult;
+  }
+
+  /**
+   * Invalidates cached recommendation feeds
+   */
+  static invalidateUserCache(userId?: string): void {
+    if (!userId) {
+      userFeedCache.clear();
+      return;
+    }
+    for (const key of userFeedCache.keys()) {
+      if (key.startsWith(`${userId}:`)) {
+        userFeedCache.delete(key);
+      }
+    }
   }
 
   /**

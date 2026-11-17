@@ -11,7 +11,7 @@
         "durationMs": 240000,
         "artworkUrl": "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=60",
         "source": "YOUTUBE",
-        "createdAt": "2026-11-17T12:14:55.793Z"
+        "createdAt": "2026-11-17T12:49:23.823Z"
       }
     ],
     [
@@ -25,7 +25,7 @@
         "artworkUrl": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&auto=format&fit=crop&q=60",
         "source": "LOCAL",
         "externalUrl": "https://syncwave.app",
-        "createdAt": "2026-11-17T12:14:53.396Z"
+        "createdAt": "2026-11-17T12:49:21.228Z"
       }
     ],
     [
@@ -38,7 +38,7 @@
         "durationMs": 360000,
         "artworkUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=60",
         "source": "LOCAL",
-        "createdAt": "2026-11-17T12:14:53.396Z"
+        "createdAt": "2026-11-17T12:49:21.228Z"
       }
     ]
   ],

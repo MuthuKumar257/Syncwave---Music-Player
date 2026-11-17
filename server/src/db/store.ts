@@ -110,6 +110,7 @@ export interface UserMusicPreference {
   favouriteGenres: string[];
   favouriteMovies: string[];
   preferredMoods?: string[];
+  preferenceVersion?: number;
   hasCompletedOnboarding?: boolean;
   personalizationEnabled: boolean;
   historyEnabled: boolean;
@@ -159,13 +160,43 @@ export interface ListeningEventRecord {
   timestamp: string;
 }
 
+export type RecommendationFeedbackType =
+  | 'LIKE'
+  | 'DISLIKE'
+  | 'HIDE'
+  | 'NOT_INTERESTED'
+  | 'MORE_LIKE_THIS'
+  | 'LESS_LIKE_THIS';
+
 export interface RecommendationFeedbackRecord {
   id: number;
   userId: string;
   targetId: string;
   targetType: 'SONG' | 'SOUNDTRACK' | 'ARTIST' | 'COMPOSER';
-  feedbackType: 'LIKE' | 'DISLIKE' | 'HIDE' | 'NOT_INTERESTED';
+  feedbackType: RecommendationFeedbackType;
   timestamp: string;
+}
+
+export interface RecommendationImpressionRecord {
+  id: number;
+  userId: string;
+  songId: string;
+  sectionName: string;
+  timestamp: string;
+}
+
+export interface RecommendationWeightsConfig {
+  artistPreference: number;        // 0.20 (20%)
+  musicDirector: number;           // 0.15 (15%)
+  genreAndMood: number;            // 0.15 (15%)
+  listeningBehavior: number;       // 0.25 (25%)
+  favoritesSimilarity: number;     // 0.15 (15%)
+  discoveryFreshness: number;      // 0.10 (10%)
+  // Optional backward compatibility aliases
+  languageMatch?: number;
+  listeningHistory?: number;
+  songSimilarity?: number;
+  discoveryPopularity?: number;
 }
 
 export interface DailyMixRecord {
@@ -191,12 +222,27 @@ class InMemorySyncStore {
   userPreferences: Map<string, UserMusicPreference> = new Map();
   listeningEvents: ListeningEventRecord[] = [];
   feedbacks: RecommendationFeedbackRecord[] = [];
+  impressions: RecommendationImpressionRecord[] = [];
   dailyMixes: Map<string, DailyMixRecord[]> = new Map(); // userId -> DailyMixRecord[]
   userSongStats: Map<string, Map<string, SongListeningStat>> = new Map(); // userId -> (songId -> SongListeningStat)
 
   private historyIdCounter = 1;
   private eventIdCounter = 1;
   private feedbackIdCounter = 1;
+  private impressionIdCounter = 1;
+  private userStateVersions: Map<string, number> = new Map();
+  private recommendationWeights: RecommendationWeightsConfig = {
+    artistPreference: 0.20,
+    musicDirector: 0.15,
+    genreAndMood: 0.15,
+    listeningBehavior: 0.25,
+    favoritesSimilarity: 0.15,
+    discoveryFreshness: 0.10,
+    languageMatch: 0.0,
+    listeningHistory: 0.25,
+    songSimilarity: 0.15,
+    discoveryPopularity: 0.10
+  };
   private diskFilePath = path.resolve(__dirname, '../../data/syncwave_store.json');
   private saveTimeout: NodeJS.Timeout | null = null;
 
@@ -684,6 +730,7 @@ class InMemorySyncStore {
       set = new Set();
       this.favorites.set(userId, set);
     }
+    this.bumpUserStateVersion(userId);
     if (set.has(targetId)) {
       set.delete(targetId);
       this.persistToDisk();
@@ -704,6 +751,7 @@ class InMemorySyncStore {
     }
     set.delete(targetId);
     set.add(targetId);
+    this.bumpUserStateVersion(userId);
     this.persistToDisk();
   }
 
@@ -711,6 +759,7 @@ class InMemorySyncStore {
     const set = this.favorites.get(userId);
     if (set && set.has(targetId)) {
       set.delete(targetId);
+      this.bumpUserStateVersion(userId);
       this.persistToDisk();
     }
   }
@@ -832,8 +881,19 @@ class InMemorySyncStore {
     return pref;
   }
 
+  getUserStateVersion(userId: string): number {
+    return this.userStateVersions.get(userId) || 1;
+  }
+
+  bumpUserStateVersion(userId: string): number {
+    const next = (this.userStateVersions.get(userId) || 1) + 1;
+    this.userStateVersions.set(userId, next);
+    return next;
+  }
+
   updateUserPreferences(userId: string, updates: Partial<UserMusicPreference>): UserMusicPreference {
     const current = this.getUserPreferences(userId);
+    const nextVersion = (current.preferenceVersion || 1) + 1;
     const hasLangs = updates.preferredLanguages !== undefined
       ? updates.preferredLanguages.length > 0
       : current.preferredLanguages.length > 0;
@@ -848,9 +908,11 @@ class InMemorySyncStore {
       favouriteMovies: updates.favouriteMovies ?? current.favouriteMovies,
       preferredMoods: updates.preferredMoods ?? current.preferredMoods ?? [],
       hasCompletedOnboarding: updates.hasCompletedOnboarding ?? (hasLangs || current.hasCompletedOnboarding || false),
+      preferenceVersion: nextVersion,
       updatedAt: new Date().toISOString()
     };
     this.userPreferences.set(userId, updated);
+    this.bumpUserStateVersion(userId);
     this.persistToDisk();
     return updated;
   }
@@ -865,17 +927,20 @@ class InMemorySyncStore {
       favouriteSingers: [],
       favouriteMovies: [],
       preferredMoods: [],
+      preferenceVersion: 1,
       hasCompletedOnboarding: false,
       personalizationEnabled: true,
       historyEnabled: true,
       updatedAt: new Date().toISOString()
     };
     this.userPreferences.set(userId, resetPref);
-    // Also clear feedbacks, listening events, and song stats for this user
+    // Also clear feedbacks, impressions, listening events, and song stats for this user
     this.feedbacks = this.feedbacks.filter((f) => f.userId !== userId);
+    this.impressions = this.impressions.filter((i) => i.userId !== userId);
     this.listeningEvents = this.listeningEvents.filter((e) => e.userId !== userId);
     this.dailyMixes.delete(userId);
     this.userSongStats.delete(userId);
+    this.bumpUserStateVersion(userId);
     this.persistToDisk();
     return resetPref;
   }
@@ -943,6 +1008,7 @@ class InMemorySyncStore {
     };
 
     userStats.set(statUpdate.songId, merged);
+    this.bumpUserStateVersion(userId);
     this.persistToDisk();
     return merged;
   }
@@ -967,6 +1033,7 @@ class InMemorySyncStore {
     if (this.listeningEvents.length > 2000) {
       this.listeningEvents.length = 2000;
     }
+    this.bumpUserStateVersion(event.userId);
     this.persistToDisk();
     return fullEvent;
   }
@@ -992,11 +1059,58 @@ class InMemorySyncStore {
     if (this.feedbacks.length > 500) {
       this.feedbacks = this.feedbacks.slice(-500);
     }
+    this.bumpUserStateVersion(feedback.userId);
     return fullRecord;
   }
 
   getUserFeedback(userId: string): RecommendationFeedbackRecord[] {
     return this.feedbacks.filter((f) => f.userId === userId);
+  }
+
+  removeFeedback(userId: string, targetId: string): boolean {
+    const beforeCount = this.feedbacks.length;
+    this.feedbacks = this.feedbacks.filter(
+      (f) => !(f.userId === userId && f.targetId === targetId)
+    );
+    const removed = this.feedbacks.length < beforeCount;
+    if (removed) {
+      this.bumpUserStateVersion(userId);
+      this.persistToDisk();
+    }
+    return removed;
+  }
+
+  // Recommendation Impressions (Freshness & Diversity Tracking)
+  recordImpression(userId: string, songId: string, sectionName: string): RecommendationImpressionRecord {
+    const record: RecommendationImpressionRecord = {
+      id: this.impressionIdCounter++,
+      userId,
+      songId,
+      sectionName,
+      timestamp: new Date().toISOString()
+    };
+    this.impressions.push(record);
+    if (this.impressions.length > 2000) {
+      this.impressions = this.impressions.slice(-2000);
+    }
+    return record;
+  }
+
+  getUserImpressions(userId: string, limit = 200): RecommendationImpressionRecord[] {
+    return this.impressions.filter((i) => i.userId === userId).slice(-limit);
+  }
+
+  // Configurable Recommendation Engine Weights
+  getRecommendationWeights(): RecommendationWeightsConfig {
+    return { ...this.recommendationWeights };
+  }
+
+  setRecommendationWeights(weights: Partial<RecommendationWeightsConfig>): RecommendationWeightsConfig {
+    this.recommendationWeights = {
+      ...this.recommendationWeights,
+      ...weights
+    };
+    return { ...this.recommendationWeights };
   }
 
   // Daily Mixes

@@ -311,6 +311,8 @@ router.post('/recommendations/listening-stat', optionalAuth, async (req: Request
       clientPlatform: 'WEB'
     }).catch(() => {});
 
+    RecommendationEngineService.invalidateUserCache(userId);
+
     res.json({
       success: true,
       stat
@@ -429,11 +431,31 @@ router.get('/recommendations/similar/:songId', async (req: Request, res: Respons
   }
 });
 
+// In-flight mutex to deduplicate concurrent auto-queue generation requests for the same user & target
+const inFlightAutoQueues = new Map<string, Promise<any>>();
+
+async function getOrRunAutoQueue(userId: string, opts: any) {
+  const key = `${userId}:${opts.songId || opts.songTitle || 'ref'}:${opts.language || ''}:${opts.limit || 20}`;
+  if (inFlightAutoQueues.has(key)) {
+    return inFlightAutoQueues.get(key)!;
+  }
+  const task = Promise.resolve().then(() => {
+    return RecommendationEngineService.getAutoQueueRecommendations(userId, opts);
+  });
+  inFlightAutoQueues.set(key, task);
+  try {
+    const res = await task;
+    return res;
+  } finally {
+    inFlightAutoQueues.delete(key);
+  }
+}
+
 /**
  * POST /api/recommendations/auto-queue
  * Generates continuous playback queue based on current song, language, artist, mood, and session history
  */
-router.post('/recommendations/auto-queue', optionalAuth, (req: Request, res: Response): void => {
+router.post('/recommendations/auto-queue', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
     const {
@@ -448,7 +470,7 @@ router.post('/recommendations/auto-queue', optionalAuth, (req: Request, res: Res
       limit
     } = req.body;
 
-    const tracks = RecommendationEngineService.getAutoQueueRecommendations(userId, {
+    const tracks = await getOrRunAutoQueue(userId, {
       songId,
       songTitle,
       artist,
@@ -478,7 +500,7 @@ router.post('/recommendations/auto-queue', optionalAuth, (req: Request, res: Res
  * GET /api/recommendations/auto-queue
  * Query-based continuous automatic queue endpoint
  */
-router.get('/recommendations/auto-queue', optionalAuth, (req: Request, res: Response): void => {
+router.get('/recommendations/auto-queue', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
     const songId = req.query.songId as string | undefined;
@@ -492,7 +514,7 @@ router.get('/recommendations/auto-queue', optionalAuth, (req: Request, res: Resp
     const excludeIds = excludeParam ? excludeParam.split(',').map((s) => s.trim()) : undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 15;
 
-    const tracks = RecommendationEngineService.getAutoQueueRecommendations(userId, {
+    const tracks = await getOrRunAutoQueue(userId, {
       songId,
       songTitle,
       artist,
@@ -542,16 +564,21 @@ router.post('/recommendations/generate-smart-playlist', optionalAuth, async (req
   }
 });
 
+const VALID_FEEDBACK_TYPES = ['LIKE', 'DISLIKE', 'HIDE', 'NOT_INTERESTED', 'MORE_LIKE_THIS', 'LESS_LIKE_THIS'];
+
 /**
  * POST /api/recommendations/feedback
- * Explicit user signals (Like, Dislike, Hide)
+ * Explicit user signals (Like, Dislike, Hide, Not Interested, More Like This, Less Like This)
  */
 router.post('/recommendations/feedback', optionalAuth, (req: Request, res: Response): void => {
   const userId = getUserId(req);
   const { targetId, targetType, feedbackType } = req.body;
 
-  if (!targetId || !feedbackType) {
-    res.status(400).json({ success: false, message: 'targetId and feedbackType are required' });
+  if (!targetId || !feedbackType || !VALID_FEEDBACK_TYPES.includes(feedbackType)) {
+    res.status(400).json({
+      success: false,
+      message: `targetId and a valid feedbackType (${VALID_FEEDBACK_TYPES.join(', ')}) are required`
+    });
     return;
   }
 
@@ -562,9 +589,85 @@ router.post('/recommendations/feedback', optionalAuth, (req: Request, res: Respo
     feedbackType
   });
 
+  RecommendationEngineService.invalidateUserCache(userId);
+
   res.json({
     success: true,
     feedback: recorded
+  });
+});
+
+/**
+ * GET /api/recommendations/feedback
+ * Retrieve active feedback history for the current user
+ */
+router.get('/recommendations/feedback', optionalAuth, (req: Request, res: Response): void => {
+  const userId = getUserId(req);
+  const feedbacks = syncStore.getUserFeedback(userId);
+  res.json({
+    success: true,
+    count: feedbacks.length,
+    feedbacks
+  });
+});
+
+/**
+ * DELETE /api/recommendations/feedback/:targetId
+ * Remove explicit user feedback for a target
+ */
+router.delete('/recommendations/feedback/:targetId', optionalAuth, (req: Request, res: Response): void => {
+  const userId = getUserId(req);
+  const targetId = req.params.targetId;
+  const removed = syncStore.removeFeedback(userId, targetId);
+  RecommendationEngineService.invalidateUserCache(userId);
+  res.json({
+    success: true,
+    removed,
+    message: removed ? 'Feedback removed' : 'Feedback not found'
+  });
+});
+
+/**
+ * POST /api/recommendations/feedback/undo
+ * Undo previous feedback signal
+ */
+router.post('/recommendations/feedback/undo', optionalAuth, (req: Request, res: Response): void => {
+  const userId = getUserId(req);
+  const targetId = req.body.targetId;
+  if (!targetId) {
+    res.status(400).json({ success: false, message: 'targetId is required to undo feedback' });
+    return;
+  }
+  const removed = syncStore.removeFeedback(userId, targetId);
+  RecommendationEngineService.invalidateUserCache(userId);
+  res.json({
+    success: true,
+    undone: removed
+  });
+});
+
+/**
+ * GET /api/recommendations/config/weights
+ * Retrieve current configurable recommendation weights
+ */
+router.get('/recommendations/config/weights', (_req: Request, res: Response): void => {
+  const weights = syncStore.getRecommendationWeights();
+  res.json({
+    success: true,
+    weights
+  });
+});
+
+/**
+ * PUT /api/recommendations/config/weights
+ * Update recommendation weights dynamically
+ */
+router.put('/recommendations/config/weights', (req: Request, res: Response): void => {
+  const updated = syncStore.setRecommendationWeights(req.body || {});
+  RecommendationEngineService.invalidateUserCache();
+  res.json({
+    success: true,
+    weights: updated
   });
 });
 
@@ -604,6 +707,8 @@ router.post('/listening-events', optionalAuth, async (req: Request, res: Respons
       totalDurationSec: totalDurationSec || 0,
       clientPlatform: clientPlatform || 'WEB'
     });
+
+    RecommendationEngineService.invalidateUserCache(userId);
 
     res.json({
       success: true,
@@ -662,6 +767,7 @@ router.put('/users/me/preferences', optionalAuth, (req: Request, res: Response):
     data.hasCompletedOnboarding = data.onboardingCompleted;
   }
   const updated = syncStore.updateUserPreferences(userId, data);
+  RecommendationEngineService.invalidateUserCache(userId);
 
   res.json({
     success: true,
@@ -679,6 +785,7 @@ router.post('/users/me/preferences/reset', optionalAuth, async (req: Request, re
     const userId = getUserId(req);
     const reset = syncStore.resetUserPreferences(userId);
     await SupabaseHistoryService.clearUserHistory(userId);
+    RecommendationEngineService.invalidateUserCache(userId);
 
     res.json({
       success: true,
