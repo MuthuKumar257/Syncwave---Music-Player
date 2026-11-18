@@ -36,6 +36,9 @@ export const recommendationApi = {
         artworkUrl: t.artworkUrl,
         sourcePlatform: (t.sourcePlatform || (t.videoId ? 'YOUTUBE' : 'DOWNLOADED')) as any,
         sourceUrl: t.fullAudioUrl || t.sourceUrl || '',
+        fullAudioUrl: t.fullAudioUrl,
+        previewUrl: t.previewUrl,
+        isFullSong: t.isFullSong ?? Boolean(t.fullAudioUrl),
         language: t.language,
         isPlayableDirectly: true,
       }));
@@ -61,7 +64,7 @@ export const recommendationApi = {
   }> => {
     const params = languageOverride && languageOverride !== 'ALL' ? { language: languageOverride } : {};
     const res = await apiClient.get<{ success: boolean; data: any }>('/api/songs/home-base', { params });
-    const data = res.data?.data || {};
+    const data = res?.data?.data || {};
     const mapTrack = (t: any): Track => ({
       id: t.id,
       title: t.title,
@@ -73,6 +76,9 @@ export const recommendationApi = {
       artworkUrl: t.artworkUrl,
       sourcePlatform: (t.sourcePlatform || (t.videoId ? 'YOUTUBE' : 'LOCAL')) as any,
       sourceUrl: t.fullAudioUrl || t.sourceUrl || '',
+      fullAudioUrl: t.fullAudioUrl,
+      previewUrl: t.previewUrl,
+      isFullSong: t.isFullSong ?? Boolean(t.fullAudioUrl),
       language: t.language,
       isPlayableDirectly: true
     });
@@ -95,7 +101,7 @@ export const recommendationApi = {
     if (options?.offset) params.offset = String(options.offset);
 
     const res = await apiClient.get<{ success: boolean; data: any[] }>('/api/songs', { params });
-    const raw = res.data?.data || [];
+    const raw = res?.data?.data || [];
     return raw.map((t: any) => ({
       id: t.id,
       title: t.title,
@@ -107,6 +113,9 @@ export const recommendationApi = {
       artworkUrl: t.artworkUrl,
       sourcePlatform: (t.sourcePlatform || (t.videoId ? 'YOUTUBE' : 'LOCAL')) as any,
       sourceUrl: t.fullAudioUrl || t.sourceUrl || '',
+      fullAudioUrl: t.fullAudioUrl,
+      previewUrl: t.previewUrl,
+      isFullSong: t.isFullSong ?? Boolean(t.fullAudioUrl),
       language: t.language,
       isPlayableDirectly: true
     }));

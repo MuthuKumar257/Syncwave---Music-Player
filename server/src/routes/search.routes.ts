@@ -3,8 +3,10 @@ import { Readable } from 'node:stream';
 import { SearchAggregatorService } from '../services/search/searchAggregator.service';
 import { KNOWN_INDIAN_MOVIES, COMPOSER_ALIASES, KNOWN_TRACK_VIDEO_MAP } from '../services/search/indianCinema.helper';
 import { ARTISTS_CATALOG } from '../services/recommendation/artistCatalog.data';
+import { RecommendationEngineService } from '../services/recommendation/recommendationEngine.service';
 import { YouTubeProvider } from '../services/search/youtube.provider';
 import { AppleMusicProvider } from '../services/search/appleMusic.provider';
+import { OpenAudioProvider, OpenAudioTrack } from '../services/search/openAudio.provider';
 import { optionalAuth } from '../middleware/auth';
 import { syncStore } from '../db/store';
 import { normalizeLanguageList, normalizeLanguageToken } from '../utils/languageEligibility';
@@ -405,18 +407,109 @@ router.get('/resolve-stream', async (req: Request, res: Response): Promise<void>
 });
 
 /**
- * GET /api/search/resolve-audio?title=...&artist=...
- * Resolves a direct M4A/MP3 audio stream URL for playback, explicitly reporting preview vs full-song status.
+ * GET /api/search/resolve-audio?title=...&artist=...&songId=...
+ * Resolves a direct M4A/MP3 audio stream URL for playback, prioritizing authorized full songs over 30s previews.
  */
 router.get('/resolve-audio', async (req: Request, res: Response): Promise<void> => {
   const title = ((req.query.title as string) || '').trim();
   const artist = ((req.query.artist as string) || '').trim();
+  const songId = (((req.query.songId || req.query.id) as string) || '').trim();
 
-  if (!title) {
-    res.status(400).json({ success: false, message: 'Song title is required' });
+  if (!title && !songId) {
+    res.status(400).json({ success: false, message: 'Song title or ID is required' });
     return;
   }
 
+  // 1. Direct Catalog / Store inspection for full-length audio stream
+  if (songId) {
+    const storeSong = syncStore.getSongById(songId);
+    if (storeSong?.fullAudioUrl && !isPreviewOrSampleUrl(storeSong.fullAudioUrl) && !isWebpageOnlyUrl(storeSong.fullAudioUrl)) {
+      res.json({
+        success: true,
+        audioUrl: storeSong.fullAudioUrl,
+        title: storeSong.title,
+        artist: storeSong.artist,
+        artworkUrl: storeSong.artworkUrl,
+        durationMs: storeSong.durationMs,
+        isPreview: false,
+        isFullSong: true,
+        downloadAllowed: true
+      });
+      return;
+    }
+
+    const catSong = RecommendationEngineService.findTrackById(songId);
+    if (catSong?.fullAudioUrl && !isPreviewOrSampleUrl(catSong.fullAudioUrl) && !isWebpageOnlyUrl(catSong.fullAudioUrl)) {
+      res.json({
+        success: true,
+        audioUrl: catSong.fullAudioUrl,
+        title: catSong.title,
+        artist: catSong.artist,
+        artworkUrl: catSong.artworkUrl,
+        durationMs: catSong.durationMs,
+        isPreview: false,
+        isFullSong: true,
+        downloadAllowed: true
+      });
+      return;
+    }
+  }
+
+  // 2. Exact or high-confidence match in open audio sources (Jamendo CC / Internet Archive full tracks)
+  try {
+    const openQuery = artist ? `${title} ${artist}`.trim() : title;
+    const openTracks: OpenAudioTrack[] = await OpenAudioProvider.searchTracks(openQuery, 4);
+    const fullMatch = openTracks.find(
+      (t: OpenAudioTrack) =>
+        t.fullAudioUrl &&
+        t.durationMs >= 45000 &&
+        !isPreviewOrSampleUrl(t.fullAudioUrl) &&
+        (t.title.toLowerCase().includes(title.toLowerCase()) || title.toLowerCase().includes(t.title.toLowerCase()))
+    ) || (openTracks[0]?.durationMs >= 45000 && !isPreviewOrSampleUrl(openTracks[0]?.fullAudioUrl) ? openTracks[0] : undefined);
+
+    if (fullMatch?.fullAudioUrl) {
+      res.json({
+        success: true,
+        audioUrl: fullMatch.fullAudioUrl,
+        title: fullMatch.title,
+        artist: fullMatch.artist,
+        artworkUrl: fullMatch.artworkUrl,
+        durationMs: fullMatch.durationMs,
+        isPreview: false,
+        isFullSong: true,
+        downloadAllowed: true
+      });
+      return;
+    }
+  } catch (err) {
+    console.warn('[resolve-audio] OpenAudio lookup failed:', err);
+  }
+
+  // 3. Check full download resolution pipeline
+  try {
+    const fullSource = await resolveFullDownloadSource({
+      title,
+      artist,
+      expectedDurationMs: 0
+    });
+    if (fullSource.downloadable && fullSource.status === 'FULL_SONG' && fullSource.audioUrl) {
+      res.json({
+        success: true,
+        audioUrl: fullSource.audioUrl,
+        title,
+        artist,
+        durationMs: fullSource.expectedDurationMs || 240000,
+        isPreview: false,
+        isFullSong: true,
+        downloadAllowed: true
+      });
+      return;
+    }
+  } catch (err) {
+    console.warn('[resolve-audio] resolveFullDownloadSource lookup failed:', err);
+  }
+
+  // 4. Fallback to iTunes preview only if no authorized full-song source exists
   try {
     const queries = artist ? [`${title} ${artist}`.trim(), title] : [title];
     for (const query of queries) {
@@ -430,8 +523,10 @@ router.get('/resolve-audio', async (req: Request, res: Response): Promise<void> 
           title: withAudio.title,
           artist: withAudio.artist,
           artworkUrl: withAudio.artworkUrl,
-          durationMs: withAudio.durationMs,
+          durationMs: withAudio.durationMs || 30000,
+          actualAudioDurationMs: preview ? 30000 : withAudio.durationMs,
           isPreview: preview,
+          isFullSong: !preview,
           downloadAllowed: !preview,
           downloadReason: preview
             ? 'Catalog source provides a 30-second preview clip only; full-song downloading is blocked to prevent saving partial audio.'

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Track } from '../api/types';
-import { audioManager } from '../audio/audioManager';
+import { audioManager, PlaybackStatus } from '../audio/audioManager';
 import { recommendationApi } from '../api/recommendationApi';
 import { useRecommendationStore } from './useRecommendationStore';
 import {
@@ -46,6 +46,8 @@ interface PlayerState {
   isPlaying: boolean;
   autoplay: boolean;
   playbackIntent: 'none' | 'play' | 'pause';
+  playbackStatus: PlaybackStatus;
+  setPlaybackStatus: (status: PlaybackStatus) => void;
   userPlayInitiated: boolean;
   position: number;
   duration: number;
@@ -280,6 +282,51 @@ const fetchAndAppendAutoRecommendations = async (
     console.log(`[usePlayerStore Mobile] Number of duplicate songs filtered: ${duplicatesFiltered}`);
     console.log(`[usePlayerStore Mobile] Number of valid songs added to queue: ${uniqueNew.length}`);
 
+    // Fallback: If recommendation API returned insufficient tracks, replenish from shuffled catalogue in user's languages
+    if (uniqueNew.length < 5) {
+      try {
+        const baseFeed = await recommendationApi.getBaseFeed();
+        const catalogCandidates: Track[] = [
+          ...(baseFeed.allAvailable || []),
+          ...(baseFeed.recommended || []),
+          ...(baseFeed.trending || []),
+          ...(baseFeed.popularSongs || [])
+        ];
+
+        const eligibleCatalog = catalogCandidates.filter((item: Track) => {
+          if (userLangs.length > 0 && !isTrackLanguageEligible(item, userLangs)) {
+            return false;
+          }
+          return true;
+        });
+
+        // Filter out tracks already in the active queue, already added to uniqueNew, or in currentPlayed
+        let pool = eligibleCatalog.filter(
+          (t) => !freshQueueIds.has(t.id) && !seenCandidateIds.has(t.id) && !currentPlayed.has(t.id)
+        );
+
+        // If eligible unplayed catalogue is exhausted, reset candidate played-exclusion so songs can cycle
+        if (pool.length === 0) {
+          console.log('[usePlayerStore Mobile] Eligible catalogue exhausted. Cycling shuffled catalogue songs.');
+          pool = eligibleCatalog.filter(
+            (t) => !freshQueueIds.has(t.id) && !seenCandidateIds.has(t.id) && t.id !== referenceTrack.id
+          );
+        }
+
+        // Shuffle pool for varied listening
+        const shuffledPool = pool.sort(() => Math.random() - 0.5);
+        for (const item of shuffledPool) {
+          if (!seenCandidateIds.has(item.id)) {
+            seenCandidateIds.add(item.id);
+            uniqueNew.push(item);
+            if (uniqueNew.length >= 10) break;
+          }
+        }
+      } catch (catErr) {
+        console.warn('[usePlayerStore Mobile] Catalogue fallback fetch error:', catErr);
+      }
+    }
+
     if (uniqueNew.length > 0) {
       set({
         queue: [...freshQueue, ...uniqueNew],
@@ -368,6 +415,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       queueIndex: index >= 0 ? index : 0,
       isPlaying: true,
       playbackIntent: 'play',
+      playbackStatus: 'LOADING',
       userPlayInitiated: true,
       isMiniPlayerVisible: true,
       duration: Math.round(track.durationMs / 1000),
@@ -398,6 +446,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     set({
       isPlaying: nextPlaying,
       playbackIntent: nextPlaying ? 'play' : 'pause',
+      playbackStatus: nextPlaying ? 'PLAYING' : 'PAUSED',
       userPlayInitiated: nextPlaying
     });
     if (nextPlaying) {
@@ -618,11 +667,46 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
   });
 
+  if (typeof audioManager.setListener === 'function') {
+    audioManager.setListener({
+      onPlaybackStatusChange: (status, isPlaying) => {
+        set({ playbackStatus: status, isPlaying });
+      },
+      onProgressUpdate: (pos, dur) => {
+        get().setPlaybackProgress(pos, dur);
+      },
+      onQueueEnded: () => {
+        const s = get();
+        if (s.repeatMode === 'ONE' && s.currentTrack) {
+          void audioManager.seekTo(0);
+          void audioManager.resume();
+        } else {
+          void get().playNext();
+        }
+      },
+      onTrackChanged: (trackIndex) => {
+        const s = get();
+        if (trackIndex >= 0 && trackIndex < s.queue.length) {
+          const track = s.queue[trackIndex];
+          if (track && track.id !== s.currentTrack?.id) {
+            set({ currentTrack: track, queueIndex: trackIndex });
+            const remaining = s.queue.length - 1 - trackIndex;
+            if (remaining < 5 && s.repeatMode !== 'ONE') {
+              void fetchAndAppendAutoRecommendations(track, get, set);
+            }
+          }
+        }
+      }
+    });
+  }
+
   return {
     currentTrack: null,
     isPlaying: false,
     autoplay: false,
     playbackIntent: 'none',
+    playbackStatus: 'IDLE',
+    setPlaybackStatus: (status: PlaybackStatus) => set({ playbackStatus: status }),
     userPlayInitiated: false,
     position: 0,
     duration: 0,
@@ -863,7 +947,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     setPlaybackProgress: (position: number, duration: number) => {
       if (usePlaybackSessionStore.getState().isRemoteMode) return;
-      set({ position, duration });
+      const validDuration = duration > 0 ? duration : get().duration;
+      set({ position, duration: validDuration });
       persistMobilePlaybackSession(get, false);
 
       const s = get();
@@ -1114,6 +1199,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         isPlaying: false,
         autoplay: false,
         playbackIntent: 'none',
+        playbackStatus: 'IDLE',
         userPlayInitiated: false,
         position: 0,
         duration: 0,

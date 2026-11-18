@@ -1,27 +1,39 @@
 import TrackPlayer, { Event } from 'react-native-track-player';
+import { usePlayerStore } from '../store/usePlayerStore';
 
 export async function PlaybackService(): Promise<void> {
   TrackPlayer.addEventListener(Event.RemotePlay, () => {
-    TrackPlayer.play();
+    const store = usePlayerStore.getState();
+    if (!store.isPlaying) {
+      void store.togglePlayPause();
+    }
   });
 
   TrackPlayer.addEventListener(Event.RemotePause, () => {
-    TrackPlayer.pause();
+    const store = usePlayerStore.getState();
+    if (store.isPlaying) {
+      void store.togglePlayPause();
+    }
   });
 
   TrackPlayer.addEventListener(Event.RemoteNext, () => {
-    TrackPlayer.skipToNext();
+    void usePlayerStore.getState().playNext();
   });
 
   TrackPlayer.addEventListener(Event.RemotePrevious, () => {
-    TrackPlayer.skipToPrevious();
+    void usePlayerStore.getState().playPrevious();
   });
 
   TrackPlayer.addEventListener(Event.RemoteSeek, (event) => {
-    TrackPlayer.seekTo(event.position);
+    if (typeof event.position === 'number') {
+      void usePlayerStore.getState().seekTo(event.position);
+    }
   });
 
   TrackPlayer.addEventListener(Event.RemoteStop, () => {
-    TrackPlayer.stop();
+    const store = usePlayerStore.getState();
+    if (store.isPlaying) {
+      void store.togglePlayPause();
+    }
   });
 }

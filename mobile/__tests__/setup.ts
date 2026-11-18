@@ -46,6 +46,13 @@ vi.mock('react-native-track-player', () => ({
     skipToPrevious: vi.fn().mockResolvedValue(undefined),
     seekTo: vi.fn().mockResolvedValue(undefined),
     setVolume: vi.fn().mockResolvedValue(undefined),
+    setRate: vi.fn().mockResolvedValue(undefined),
+    skip: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    getState: vi.fn().mockResolvedValue('playing'),
+    getDuration: vi.fn().mockResolvedValue(240),
+    getPosition: vi.fn().mockResolvedValue(0),
+    addEventListener: vi.fn().mockReturnValue({ remove: vi.fn() }),
     registerPlaybackService: vi.fn()
   },
   Capability: {
@@ -62,7 +69,24 @@ vi.mock('react-native-track-player', () => ({
     Playing: 'playing',
     Paused: 'paused',
     Stopped: 'stopped',
-    Buffering: 'buffering'
+    Buffering: 'buffering',
+    Loading: 'loading',
+    Ended: 'ended',
+    Error: 'error'
+  },
+  Event: {
+    PlaybackState: 'playback-state',
+    PlaybackError: 'playback-error',
+    PlaybackQueueEnded: 'playback-queue-ended',
+    PlaybackTrackChanged: 'playback-track-changed',
+    PlaybackActiveTrackChanged: 'playback-active-track-changed',
+    PlaybackProgressUpdated: 'playback-progress-updated',
+    RemotePlay: 'remote-play',
+    RemotePause: 'remote-pause',
+    RemoteStop: 'remote-stop',
+    RemoteNext: 'remote-next',
+    RemotePrevious: 'remote-previous',
+    RemoteSeek: 'remote-seek'
   },
   AppKilledPlaybackBehavior: {
     ContinuePlayback: 'continue'
