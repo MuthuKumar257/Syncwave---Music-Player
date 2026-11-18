@@ -4,6 +4,7 @@ import { webAudioPlayer } from '../audio/WebAudioPlayer';
 import { useLibraryStore } from './useLibraryStore';
 import { indexedDb } from '../db/indexedDb';
 import { useAnalyticsStore } from './useAnalyticsStore';
+import { useRecommendationStore } from './useRecommendationStore';
 import {
   PendingCommand,
   registerPlaybackSessionBridge,
@@ -13,6 +14,33 @@ import {
   songToSessionTrack,
   usePlaybackSessionStore,
 } from './usePlaybackSessionStore';
+
+export function normalizeClientLanguage(lang?: string | null): string {
+  if (!lang || typeof lang !== 'string') return '';
+  const cleaned = lang.trim().toLowerCase();
+  const map: Record<string, string> = {
+    tamil: 'Tamil', ta: 'Tamil', tam: 'Tamil',
+    telugu: 'Telugu', te: 'Telugu', tel: 'Telugu',
+    hindi: 'Hindi', hi: 'Hindi', hin: 'Hindi',
+    malayalam: 'Malayalam', ml: 'Malayalam', mal: 'Malayalam',
+    kannada: 'Kannada', kn: 'Kannada', kan: 'Kannada',
+    punjabi: 'Punjabi', pa: 'Punjabi', pan: 'Punjabi',
+    marathi: 'Marathi', mr: 'Marathi', mar: 'Marathi',
+    bengali: 'Bengali', bn: 'Bengali', ben: 'Bengali',
+    english: 'English', en: 'English', eng: 'English'
+  };
+  return map[cleaned] || (cleaned.charAt(0).toUpperCase() + cleaned.slice(1));
+}
+
+export function isSongLanguageEligibleClient(song: { language?: string | null }, userLanguages: (string | null | undefined)[]): boolean {
+  if (!userLanguages || userLanguages.length === 0) return false;
+  const normUserLangs = userLanguages.map(normalizeClientLanguage).filter(Boolean);
+  if (normUserLangs.length === 0) return false;
+
+  const songLang = normalizeClientLanguage(song.language);
+  if (!songLang) return false;
+  return normUserLangs.includes(songLang);
+}
 
 export interface AudioControlSignal {
   action: 'PLAY' | 'PAUSE' | 'SEEK' | 'VOLUME';
@@ -79,6 +107,7 @@ interface PlayerState {
   clearQueue: () => void;
   fetchMoreRecommendations: () => Promise<void>;
   clearSessionHistory: () => void;
+  pruneQueueByLanguage: () => void;
   resetForGuest: () => void;
   syncExternalAudioState: (currentTime?: number, duration?: number, isPlaying?: boolean) => void;
   handleExternalAudioEnded: () => void;
@@ -277,6 +306,7 @@ const fetchAndAppendAutoRecommendations = async (
     const excludeIds = Array.from(new Set([...playedSet, ...existingQueueIds]));
 
     const candidates: Song[] = [];
+    const userPreferredLangs = useRecommendationStore.getState().preferences?.preferredLanguages || [];
 
     // 1. If local audio track, check local indexedDb library songs
     const isLocal = Boolean(
@@ -291,6 +321,9 @@ const fetchAndAppendAutoRecommendations = async (
         const librarySongs = useLibraryStore.getState().songs || [];
         const localMatches = librarySongs.filter((cand) => {
           if (excludeIds.includes(cand.id)) return false;
+          if (userPreferredLangs.length > 0 && !isSongLanguageEligibleClient(cand, userPreferredLangs)) {
+            return false;
+          }
           const sameArtist =
             cand.artist &&
             referenceSong.artist &&
@@ -299,15 +332,11 @@ const fetchAndAppendAutoRecommendations = async (
             cand.album &&
             referenceSong.album &&
             cand.album.toLowerCase() === referenceSong.album.toLowerCase();
-          const sameGenre =
-            cand.genre &&
-            referenceSong.genre &&
-            cand.genre.toLowerCase() === referenceSong.genre.toLowerCase();
           const sameLang =
             cand.language &&
             referenceSong.language &&
             cand.language.toLowerCase() === referenceSong.language.toLowerCase();
-          return sameArtist || sameAlbum || sameGenre || sameLang;
+          return sameArtist || sameAlbum || sameLang;
         });
         candidates.push(...localMatches);
       } catch {
@@ -363,7 +392,16 @@ const fetchAndAppendAutoRecommendations = async (
               createdAt: new Date().toISOString(),
             };
           });
-        candidates.push(...mapped);
+
+        const validTracks = mapped.filter((cand: Song) => {
+          if (userPreferredLangs.length > 0 && !isSongLanguageEligibleClient(cand, userPreferredLangs)) {
+            console.log(`[usePlayerStore] Dropped song candidate "${cand.title}" outside user languages (${cand.language})`);
+            return false;
+          }
+          return true;
+        });
+
+        candidates.push(...validTracks);
       } else {
         console.warn(`[usePlayerStore] Recommendation API returned status ${res.status}`);
       }
@@ -661,20 +699,102 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
     }
 
-    if (isLocalAudio) {
-      // Local/offline audio files play directly through WebAudioPlayer (HTML5 Audio)
+    const isDirectAudioSource = (u?: string | null): boolean => {
+      if (!u || typeof u !== 'string') return false;
+      return !/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|open\.spotify\.com|music\.apple\.com)\//i.test(u);
+    };
+
+    const hasDirectAudio = Boolean(
+      song.blob ||
+      song.fileHandle ||
+      song.source === 'LOCAL' ||
+      song.source === 'DOWNLOADED' ||
+      isDirectAudioSource(song.uri) ||
+      isDirectAudioSource((song as any).fullAudioUrl) ||
+      isDirectAudioSource((song as any).previewUrl) ||
+      isDirectAudioSource(song.externalUrl)
+    );
+
+    const fallbackToYouTubeOrDirect = (targetSong: Song, withCrossfade: boolean, posSec: number) => {
+      let resolvedVideoId = targetSong.videoId;
+      if (!resolvedVideoId) {
+        if (targetSong.id.startsWith('yt_')) {
+          resolvedVideoId = targetSong.id.replace('yt_', '');
+        } else if (targetSong.externalUrl) {
+          const match = targetSong.externalUrl.match(/(?:v=|embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+          if (match) resolvedVideoId = match[1];
+        }
+      }
+
+      if (resolvedVideoId) {
+        webAudioPlayer.pause();
+        set({
+          currentSong: { ...targetSong, videoId: resolvedVideoId },
+          isPlaying: true,
+          playbackIntent: 'play',
+          userPlayInitiated: true,
+          currentTime: posSec,
+          activeAudioVideoId: resolvedVideoId,
+          isAudioStreamMode: true,
+          duration: Math.round((targetSong.durationMs || 0) / 1000) || 240,
+        });
+        publishLocalPlaybackState(get, true);
+        persistPlaybackSession(get, true);
+      } else {
+        fetch(
+          `/api/search/resolve-stream?title=${encodeURIComponent(targetSong.title)}&artist=${encodeURIComponent(targetSong.artist)}`
+        )
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (usePlaybackSessionStore.getState().isRemoteMode || get().currentSong?.id !== targetSong.id) return;
+            if (data && data.videoId) {
+              webAudioPlayer.pause();
+              set({
+                currentSong: { ...targetSong, videoId: data.videoId },
+                isPlaying: true,
+                currentTime: posSec,
+                activeAudioVideoId: data.videoId,
+                isAudioStreamMode: true,
+                duration: Math.round((data.durationMs || 240000) / 1000),
+              });
+              publishLocalPlaybackState(get, true);
+              persistPlaybackSession(get, true);
+            } else {
+              void fallbackToDirectAudio(targetSong, withCrossfade, get, set);
+            }
+          })
+          .catch(() => {
+            void fallbackToDirectAudio(targetSong, withCrossfade, get, set);
+          });
+      }
+    };
+
+    if (hasDirectAudio) {
+      // Primary playback engine: Persistent HTMLAudioElement (WebAudioPlayer)
+      // Halts YouTube engine so multiple audio elements never play simultaneously
+      if (get().activeAudioVideoId) {
+        emitAudioSignal('PAUSE');
+      }
       set({
         activeAudioVideoId: null,
         isAudioStreamMode: false,
         currentSong: song,
         isPlaying: true,
+        playbackIntent: 'play',
+        userPlayInitiated: true,
         currentTime: initialPositionSec,
         duration: Math.round((song.durationMs || 0) / 1000) || 0,
       });
-      void webAudioPlayer.play(song, crossfade).then(() => {
-        if (initialPositionSec > 0) webAudioPlayer.seek(initialPositionSec);
-      });
+      const playPromise = webAudioPlayer.play(song, crossfade, initialPositionSec);
+      if (playPromise && typeof playPromise.then === 'function') {
+        void playPromise.then(() => {
+          if (initialPositionSec > 0) webAudioPlayer.seek(initialPositionSec);
+        });
+      } else if (initialPositionSec > 0) {
+        webAudioPlayer.seek(initialPositionSec);
+      }
       publishLocalPlaybackState(get, true);
+      persistPlaybackSession(get, true);
     } else {
       let resolvedVideoId = song.videoId;
       if (!resolvedVideoId) {
@@ -687,19 +807,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
 
       if (resolvedVideoId) {
-        // Play full song strictly in AUDIO mode (no video modal overlay)
-        webAudioPlayer.pause();
-        set({
-          currentSong: { ...song, videoId: resolvedVideoId },
-          isPlaying: true,
-          playbackIntent: 'play',
-          userPlayInitiated: true,
-          currentTime: initialPositionSec,
-          activeAudioVideoId: resolvedVideoId,
-          isAudioStreamMode: true,
-          duration: Math.round((song.durationMs || 0) / 1000) || 240,
-        });
+        fallbackToYouTubeOrDirect(song, crossfade, initialPositionSec);
       } else {
+        // Immediate synchronous state update
         set({
           currentSong: song,
           isPlaying: true,
@@ -710,33 +820,45 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           isAudioStreamMode: false,
           duration: Math.round((song.durationMs || 0) / 1000) || 240,
         });
+
+        // 1. Attempt to resolve direct HTTPS audio stream first for background Chrome/mobile playback
         fetch(
-          `/api/search/resolve-stream?title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`
+          `/api/search/resolve-audio?title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`
         )
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             if (usePlaybackSessionStore.getState().isRemoteMode || get().currentSong?.id !== song.id) return;
-            if (data && data.videoId) {
-              webAudioPlayer.pause();
+            if (data && data.audioUrl && isDirectAudioSource(data.audioUrl)) {
+              // Direct audio stream successfully resolved!
+              if (get().activeAudioVideoId) emitAudioSignal('PAUSE');
+              const resolvedDuration = data.isPreview
+                ? Math.round((data.actualAudioDurationMs || 30000) / 1000)
+                : Math.round((data.durationMs || song.durationMs || 0) / 1000) || 240;
+
+              const updatedSong = { ...song, uri: data.audioUrl };
               set({
-                currentSong: { ...song, videoId: data.videoId },
+                activeAudioVideoId: null,
+                isAudioStreamMode: false,
+                currentSong: updatedSong,
                 isPlaying: true,
+                playbackIntent: 'play',
+                userPlayInitiated: true,
                 currentTime: initialPositionSec,
-                activeAudioVideoId: data.videoId,
-                isAudioStreamMode: true,
-                duration: Math.round((data.durationMs || 240000) / 1000),
+                duration: resolvedDuration,
               });
+              void webAudioPlayer.play(updatedSong, crossfade, initialPositionSec);
               publishLocalPlaybackState(get, true);
-            } else {
-              void fallbackToDirectAudio(song, crossfade, get, set);
+              persistPlaybackSession(get, true);
+              return;
             }
+
+            // 2. Direct audio not found. Fall back to secondary YouTube Audio Engine
+            fallbackToYouTubeOrDirect(song, crossfade, initialPositionSec);
           })
           .catch(() => {
-            void fallbackToDirectAudio(song, crossfade, get, set);
+            fallbackToYouTubeOrDirect(song, crossfade, initialPositionSec);
           });
       }
-      publishLocalPlaybackState(get, true);
-      persistPlaybackSession(get, true);
     }
 
     // Play counting (>=30s or >=50%), duration accumulation, and completion
@@ -1029,6 +1151,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       playNext();
     }
   });
+
+  // Media Session & remote control track navigation callbacks
+  if (typeof (webAudioPlayer as any).setPreviousTrackCallback === 'function') {
+    (webAudioPlayer as any).setPreviousTrackCallback(() => {
+      if (usePlaybackSessionStore.getState().isRemoteMode) return;
+      get().playPrevious();
+    });
+  }
+
+  if (typeof (webAudioPlayer as any).setNextTrackCallback === 'function') {
+    (webAudioPlayer as any).setNextTrackCallback(() => {
+      if (usePlaybackSessionStore.getState().isRemoteMode) return;
+      get().playNext();
+    });
+  }
 
   return {
     currentSong: null,
@@ -1555,6 +1692,27 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
 
       void fallbackToDirectAudio(song, false, get, set);
+    },
+
+    pruneQueueByLanguage: () => {
+      const userPreferredLangs = useRecommendationStore.getState().preferences?.preferredLanguages || [];
+      if (userPreferredLangs.length === 0) return;
+      const { queue, queueIndex } = get();
+      if (!queue || queue.length === 0) return;
+
+      const current = queue[queueIndex];
+      const validQueue = queue.filter((song, idx) => {
+        // Keep current active song to avoid abrupt interruption
+        if (idx === queueIndex) return true;
+        return isSongLanguageEligibleClient(song, userPreferredLangs);
+      });
+
+      const newIndex = current ? validQueue.findIndex((s) => s.id === current.id) : 0;
+      set({
+        queue: validQueue,
+        queueIndex: Math.max(0, newIndex)
+      });
+      persistPlaybackSession(get, true);
     },
 
     resetForGuest: () => {

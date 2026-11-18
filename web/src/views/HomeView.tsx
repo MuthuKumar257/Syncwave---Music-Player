@@ -57,14 +57,21 @@ export const HomeView: React.FC = () => {
   const { setQueue, currentSong, isPlaying } = usePlayerStore();
   const {
     feed,
+    baseSections,
+    baseCatalogue,
     preferences,
     isLoading,
+    isLoadingBase,
     isRefreshing,
     feedError,
+    baseError,
+    sectionErrors,
     hiddenTrackIds,
     fetchFeed,
+    fetchBaseFeed,
     fetchPreferences,
     refreshHome,
+    retrySection,
     logListeningEvent,
     openOnboarding
   } = useRecommendationStore();
@@ -75,17 +82,16 @@ export const HomeView: React.FC = () => {
   const [selectedArtist, setSelectedArtist] = useState<ArtistRecommendationCard | null>(null);
   const [selectedMood, setSelectedMood] = useState<MoodPlaylistCard | null>(null);
 
-  // Pull-to-refresh gesture state (touch + pointer drag + top wheel overscroll)
+  // Pull-to-refresh gesture state (touch swipe at scroll top)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const dragStartYRef = useRef<number | null>(null);
-  const wheelOverscrollRef = useRef(0);
-  const wheelResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchPreferences();
     fetchFeed();
-  }, [fetchPreferences, fetchFeed]);
+    fetchBaseFeed();
+  }, [fetchPreferences, fetchFeed, fetchBaseFeed]);
 
   const filterVisible = useCallback(
     (tracks?: UnifiedTrack[]) => (tracks || []).filter((t) => !hiddenTrackIds.has(t.id)),
@@ -93,15 +99,16 @@ export const HomeView: React.FC = () => {
   );
 
   const recentlyPlayed = useMemo(() => filterVisible(feed?.recentlyPlayed), [feed, filterVisible]);
-  const recommendedForYou = useMemo(
-    () =>
-      filterVisible(
-        feed?.recommendedForYou && feed.recommendedForYou.length > 0
-          ? feed.recommendedForYou
-          : feed?.madeForYou
-      ),
-    [feed, filterVisible]
-  );
+  const recommendedForYou = useMemo(() => {
+    const recTracks = filterVisible(
+      feed?.recommendedForYou && feed.recommendedForYou.length > 0
+        ? feed.recommendedForYou
+        : feed?.madeForYou
+    );
+    if (recTracks.length > 0) return recTracks;
+    return filterVisible(baseSections?.recommended);
+  }, [feed, baseSections, filterVisible]);
+
   const basedOnListeningHistory = useMemo(
     () => ({
       basedOn: feed?.basedOnListeningHistory?.basedOn || 'your recent tracks',
@@ -125,11 +132,29 @@ export const HomeView: React.FC = () => {
   const recommendedMusicDirectors = useMemo(() => feed?.recommendedMusicDirectors || [], [feed]);
   const moodPlaylists = useMemo(() => feed?.moodPlaylists || [], [feed]);
   const similarSongs = useMemo(() => filterVisible(feed?.similarSongs), [feed, filterVisible]);
-  const popularSongs = useMemo(() => filterVisible(feed?.popularSongs), [feed, filterVisible]);
-  const trendingInLanguages = useMemo(
-    () => filterVisible(feed?.trendingInLanguages),
-    [feed, filterVisible]
-  );
+
+  const popularSongs = useMemo(() => {
+    const recPop = filterVisible(feed?.popularSongs);
+    if (recPop.length > 0) return recPop;
+    return filterVisible(baseSections?.popularSongs);
+  }, [feed, baseSections, filterVisible]);
+
+  const trendingInLanguages = useMemo(() => {
+    const recTrending = filterVisible(feed?.trendingInLanguages);
+    if (recTrending.length > 0) return recTrending;
+    return filterVisible(baseSections?.trending);
+  }, [feed, baseSections, filterVisible]);
+
+  const recentlyAdded = useMemo(() => {
+    const recRecent = filterVisible(feed?.recentlyAdded);
+    if (recRecent.length > 0) return recRecent;
+    return filterVisible(baseSections?.recentlyAdded);
+  }, [feed, baseSections, filterVisible]);
+
+  const exploreCatalogue = useMemo(() => {
+    return filterVisible(baseSections?.allAvailable || baseCatalogue);
+  }, [baseSections, baseCatalogue, filterVisible]);
+
   const discoverNewMusic = useMemo(
     () =>
       filterVisible(
@@ -139,6 +164,26 @@ export const HomeView: React.FC = () => {
       ),
     [feed, filterVisible]
   );
+
+  // Safe development diagnostics
+  useEffect(() => {
+    const safeUserId = preferences?.userId ? `${preferences.userId.slice(0, 8)}...` : 'guest_user';
+    const langs = preferences?.preferredLanguages || [];
+    console.log(
+      `[HomeRenderDiagnostics:Web] User: ${safeUserId}, Languages: [${langs.join(
+        ', '
+      )}], Rec: ${recommendedForYou.length}, Trending: ${trendingInLanguages.length}, Pop: ${
+        popularSongs.length
+      }, Recent: ${recentlyAdded.length}, Catalogue: ${exploreCatalogue.length}`
+    );
+  }, [
+    preferences,
+    recommendedForYou.length,
+    trendingInLanguages.length,
+    popularSongs.length,
+    recentlyAdded.length,
+    exploreCatalogue.length
+  ]);
 
   const triggerPullRefresh = useCallback(() => {
     if (isRefreshing) return;
@@ -181,71 +226,6 @@ export const HomeView: React.FC = () => {
       setPullDistance(0);
     }
   };
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'touch' && e.pointerType !== 'mouse') return;
-    // Only engage mouse pull-drag if not clicking an interactive button/card
-    const target = e.target as HTMLElement;
-    if (target.closest('button, a, input, [role="button"]')) return;
-    const scroller = scrollContainerRef.current;
-    if (!scroller || scroller.scrollTop > 0 || isRefreshing) return;
-    dragStartYRef.current = e.clientY;
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (dragStartYRef.current === null || isRefreshing || e.buttons === 0) return;
-    const scroller = scrollContainerRef.current;
-    if (!scroller || scroller.scrollTop > 0) {
-      dragStartYRef.current = null;
-      setPullDistance(0);
-      return;
-    }
-    const delta = e.clientY - dragStartYRef.current;
-    if (delta > 6) {
-      setPullDistance(Math.min(MAX_PULL_PX, delta * 0.5));
-    }
-  };
-
-  const handlePointerUp = () => {
-    if (dragStartYRef.current === null) return;
-    dragStartYRef.current = null;
-    if (pullDistance >= PULL_THRESHOLD_PX && !isRefreshing) {
-      triggerPullRefresh();
-    } else {
-      setPullDistance(0);
-    }
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const scroller = scrollContainerRef.current;
-    if (!scroller || scroller.scrollTop > 0 || isRefreshing) {
-      wheelOverscrollRef.current = 0;
-      return;
-    }
-    if (e.deltaY < -8) {
-      wheelOverscrollRef.current = Math.min(
-        MAX_PULL_PX + 20,
-        wheelOverscrollRef.current + Math.abs(e.deltaY) * 0.35
-      );
-      setPullDistance(Math.min(MAX_PULL_PX, wheelOverscrollRef.current));
-      if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
-      if (wheelOverscrollRef.current >= PULL_THRESHOLD_PX) {
-        wheelOverscrollRef.current = 0;
-        triggerPullRefresh();
-      } else {
-        wheelResetTimerRef.current = setTimeout(() => {
-          wheelOverscrollRef.current = 0;
-          setPullDistance(0);
-        }, 280);
-      }
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
-    };
-  }, []);
 
   const handlePlayTracksAt = (tracks: UnifiedTrack[], index: number) => {
     if (tracks.length === 0) return;
@@ -296,9 +276,11 @@ export const HomeView: React.FC = () => {
     sameMusicDirector.tracks.length > 0 ||
     similarSongs.length > 0 ||
     trendingInLanguages.length > 0 ||
+    recentlyAdded.length > 0 ||
+    popularSongs.length > 0 ||
+    exploreCatalogue.length > 0 ||
     discoverNewMusic.length > 0 ||
-    moodPlaylists.length > 0 ||
-    popularSongs.length > 0;
+    moodPlaylists.length > 0;
 
   return (
     <div
@@ -306,13 +288,8 @@ export const HomeView: React.FC = () => {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onWheel={handleWheel}
       data-testid="home-scroll-container"
-      className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-8 select-none relative pb-28 md:pb-8"
+      className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-8 select-none relative pb-20 md:pb-8"
     >
       {/* Native Pull-to-Refresh Status Pill */}
       {(pullDistance > 8 || isRefreshing) && (
@@ -345,13 +322,54 @@ export const HomeView: React.FC = () => {
         </div>
       )}
 
-      {/* Non-blocking Network Error Notice (Zero Refresh button; swipe down to retry) */}
+      {/* Section-level Network & Recommendation Error Notices with Direct Retries */}
       {feedError && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-card bg-surface border border-amber-500/30 text-xs text-text-secondary">
-          <WifiOff className="w-4 h-4 text-accent flex-shrink-0" />
-          <span className="flex-1">
-            {feed ? `Showing cached recommendations (${feedError}).` : `Unable to load recommendations (${feedError}).`} Pull down from top to retry.
-          </span>
+        <div data-testid="feed-error-notice" className="flex items-center justify-between gap-3 px-4 py-3 rounded-card bg-surface border border-amber-500/30 text-xs text-text-secondary">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <WifiOff className="w-4 h-4 text-accent flex-shrink-0" />
+            <span className="truncate">
+              {feed ? `Showing cached recommendations (${feedError}).` : `Unable to load recommendations (${feedError}).`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => retrySection('recommendations')}
+            className="flex-shrink-0 px-3 py-1 rounded bg-accent/20 hover:bg-accent/30 text-accent font-medium text-xs transition"
+          >
+            Retry Recommendations
+          </button>
+        </div>
+      )}
+
+      {baseError && (
+        <div data-testid="base-error-notice" className="flex items-center justify-between gap-3 px-4 py-3 rounded-card bg-surface border border-amber-500/30 text-xs text-text-secondary">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <WifiOff className="w-4 h-4 text-accent flex-shrink-0" />
+            <span className="truncate">Unable to load base music catalogue ({baseError}).</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => retrySection('baseFeed')}
+            className="flex-shrink-0 px-3 py-1 rounded bg-accent/20 hover:bg-accent/30 text-accent font-medium text-xs transition"
+          >
+            Retry Catalogue
+          </button>
+        </div>
+      )}
+
+      {sectionErrors.preferences && (
+        <div data-testid="preferences-error-notice" className="flex items-center justify-between gap-3 px-4 py-3 rounded-card bg-surface border border-amber-500/30 text-xs text-text-secondary">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <WifiOff className="w-4 h-4 text-accent flex-shrink-0" />
+            <span className="truncate">Failed to load user preferences ({sectionErrors.preferences}).</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => retrySection('preferences')}
+            className="flex-shrink-0 px-3 py-1 rounded bg-accent/20 hover:bg-accent/30 text-accent font-medium text-xs transition"
+          >
+            Retry Preferences
+          </button>
         </div>
       )}
 
@@ -484,7 +502,7 @@ export const HomeView: React.FC = () => {
       )}
 
       {/* Initial Skeleton Loader */}
-      {isLoading && !hasAnyContent ? (
+      {(isLoading || isLoadingBase) && !hasAnyContent ? (
         <div className="space-y-8" data-testid="home-skeleton-loader">
           {[1, 2, 3].map((row) => (
             <div key={row} className="space-y-3">
@@ -505,12 +523,28 @@ export const HomeView: React.FC = () => {
           ))}
         </div>
       ) : !hasAnyContent ? (
-        <div className="rounded-card bg-surface border border-hairline p-10 text-center space-y-2.5">
+        <div data-testid="home-empty-state" className="rounded-card bg-surface border border-hairline p-10 text-center space-y-3">
           <Music2 className="w-9 h-9 text-text-muted mx-auto opacity-60" />
-          <h3 className="text-sm font-medium text-text-primary">No recommendations available yet</h3>
+          <h3 className="text-sm font-medium text-text-primary">No songs available in your selected languages</h3>
           <p className="text-xs text-text-muted max-w-md mx-auto">
-            Play songs or select your preferred languages and artists in Profile settings, then pull down from the top to refresh your feed.
+            No playable tracks currently match your preferences. Try selecting more languages or retrying the music feed.
           </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={openOnboarding}
+              className="px-4 py-2 rounded-control bg-accent text-black text-xs font-semibold hover:brightness-110"
+            >
+              Choose Languages
+            </button>
+            <button
+              type="button"
+              onClick={() => refreshHome()}
+              className="px-4 py-2 rounded-control bg-surface-elevated border border-hairline text-text-primary text-xs font-medium hover:border-hairline-strong"
+            >
+              Refresh Songs
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-9">
@@ -843,6 +877,44 @@ export const HomeView: React.FC = () => {
                   title: 'Discover New Music',
                   subtitle: 'Handpicked fresh releases & hidden gems',
                   tracks: discoverNewMusic
+                })
+              }
+            />
+          )}
+
+          {/* 12. RECENTLY ADDED (Independent Base Feed) */}
+          {recentlyAdded.length > 0 && (
+            <TrackCarouselSection
+              sectionKey="recently-added"
+              title="Recently Added"
+              subtitle="Latest additions and sound recordings in your languages"
+              tracks={recentlyAdded}
+              onPlayTrack={(idx) => handlePlayTracksAt(recentlyAdded, idx)}
+              onSeeAll={() =>
+                openSeeAll({
+                  kind: 'TRACKS',
+                  title: 'Recently Added',
+                  subtitle: 'Newest tracks added to SyncWave',
+                  tracks: recentlyAdded
+                })
+              }
+            />
+          )}
+
+          {/* 13. EXPLORE MUSIC CATALOGUE (Reliable Base Feed) */}
+          {exploreCatalogue.length > 0 && (
+            <TrackCarouselSection
+              sectionKey="explore-music-catalogue"
+              title="Explore Music Catalogue"
+              subtitle={`All verified tracks available across ${activeLangSummary}`}
+              tracks={exploreCatalogue}
+              onPlayTrack={(idx) => handlePlayTracksAt(exploreCatalogue, idx)}
+              onSeeAll={() =>
+                openSeeAll({
+                  kind: 'TRACKS',
+                  title: 'Explore Music Catalogue',
+                  subtitle: activeLangSummary,
+                  tracks: exploreCatalogue
                 })
               }
             />

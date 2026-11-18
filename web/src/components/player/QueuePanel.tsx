@@ -81,7 +81,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({ isOpen, onClose }) => {
       {/* Main Drawer Container */}
       <div className="w-full max-w-md h-full bg-surface border-l border-hairline flex flex-col shadow-2xl relative select-none animate-in slide-in-from-right duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-hairline bg-surface-raised">
+        <div className="flex items-center justify-between p-4 border-b border-hairline bg-surface-elevated">
           <div className="flex items-center gap-2">
             <ListMusic className="w-5 h-5 text-accent" />
             <div>
@@ -158,7 +158,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({ isOpen, onClose }) => {
         )}
 
         {/* Scrollable Queue Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-[max(env(safe-area-inset-bottom,0px),20px)]">
           {/* Section: Currently Playing */}
           {currentSong && (
             <div>

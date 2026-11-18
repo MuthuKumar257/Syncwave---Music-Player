@@ -243,7 +243,7 @@ export const DiscoverView: React.FC = () => {
   });
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 select-none relative">
+    <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-6 select-none relative pb-20 md:pb-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl md:text-3xl font-medium text-text-primary tracking-tight">
@@ -257,18 +257,18 @@ export const DiscoverView: React.FC = () => {
       {/* Search Input & Suggestions */}
       <div className="relative">
         <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-          <Search className="w-4 h-4 text-text-muted absolute left-3.5 pointer-events-none" />
+          <Search className="w-4 h-4 text-text-muted absolute left-3 sm:left-3.5 pointer-events-none" />
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search by theme (e.g. love songs, melody), movie, artist or track..."
+            placeholder="Search theme, movie, artist or track..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setShowSuggestions(true);
             }}
             onFocus={() => setShowSuggestions(true)}
-            className="w-full bg-surface border border-hairline rounded-control pl-10 pr-24 py-2.5 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-hairlineLight transition-colors"
+            className="w-full bg-surface border border-hairline rounded-control pl-9 sm:pl-10 pr-20 sm:pr-24 py-2.5 text-xs text-text-primary placeholder-text-muted focus:outline-none focus:border-hairlineLight transition-colors"
           />
 
           <div className="absolute right-1.5 flex items-center gap-1">

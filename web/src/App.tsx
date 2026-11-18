@@ -18,6 +18,7 @@ import { GoogleCallbackView } from './views/GoogleCallbackView';
 import { SongPreviewView } from './views/SongPreviewView';
 import { OnboardingModal } from './components/onboarding/OnboardingModal';
 import { Volume2 } from 'lucide-react';
+import { webAudioPlayer } from './audio/WebAudioPlayer';
 import { useLibraryStore } from './store/useLibraryStore';
 import { useSchedulerStore } from './store/useSchedulerStore';
 import { usePlayerStore } from './store/usePlayerStore';
@@ -45,6 +46,9 @@ export const App: React.FC = () => {
   } = usePlayerStore();
 
   useEffect(() => {
+    // Mount & initialize the singleton persistent HTMLAudioElement outside React route tree
+    webAudioPlayer.getAudioElement();
+
     loadLibrary();
     initScheduler();
     void restorePlaybackSession();
@@ -52,6 +56,7 @@ export const App: React.FC = () => {
     // Auto-synchronize local music folders & downloaded Songs folder in background
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
+        webAudioPlayer.syncStateWithHardware();
         void syncLibrary({ quiet: true });
       } else if (document.visibilityState === 'hidden') {
         persistCurrentSession(true);
@@ -127,7 +132,7 @@ export const App: React.FC = () => {
   }, [togglePlay, seek, currentTime, setVolume, volume, toggleMute, isQueueOpen, setQueueOpen]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-text antialiased font-sans">
+    <div className="flex h-full w-full min-h-[100dvh] overflow-hidden bg-background text-text antialiased font-sans">
       {/* Autoplay Unlock Notice (Browser Audio Restriction Recovery) */}
       {isAutoplayBlocked && (
         <div

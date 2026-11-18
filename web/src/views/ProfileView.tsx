@@ -118,7 +118,7 @@ export const ProfileView: React.FC = () => {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 flex items-center justify-center select-none min-h-[70vh]">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 flex items-center justify-center select-none min-h-[70vh] pb-20 md:pb-8">
         <div className="max-w-md w-full p-8 rounded-card bg-surface border border-hairline text-center space-y-6">
           {/* 1. App Logo */}
           <div className="flex flex-col items-center justify-center space-y-3">
@@ -168,7 +168,7 @@ export const ProfileView: React.FC = () => {
     : 1;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 select-none">
+    <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-6 select-none pb-20 md:pb-8">
       <OnboardingModal isOpen={isOnboardingOpen} onClose={() => { closeOnboarding(); fetchProfileStats(true); }} />
 
       {/* Header & Identity Banner */}

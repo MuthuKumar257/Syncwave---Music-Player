@@ -25,11 +25,42 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    min-height: 100dvh;
+  }
+
+  html {
+    height: 100%;
+    width: 100%;
+  }
+
+  /* Accessible Focus States */
+  :focus-visible {
+    outline: 2px solid #F59E0B;
+    outline-offset: 2px;
   }
 
   /* Tabular numbers across the interface */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Scrollbar None Utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

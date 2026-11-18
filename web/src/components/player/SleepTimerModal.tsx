@@ -58,7 +58,7 @@ export const SleepTimerModal: React.FC<SleepTimerModalProps> = ({ isOpen, onClos
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-surface border border-hairline rounded-panel p-5 space-y-4 shadow-subtle"
+        className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-surface border border-hairline rounded-panel p-4 sm:p-5 space-y-4 shadow-subtle"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

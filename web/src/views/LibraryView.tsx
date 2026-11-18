@@ -183,7 +183,7 @@ export const LibraryView: React.FC = () => {
   const QUICK_ONLINE_SEARCHES = ['love songs', 'En Kannu Kulla', 'melody songs', 'sad songs', 'party songs'];
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 select-none">
+    <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-6 select-none pb-20 md:pb-8">
       <input
         ref={fileInputRef}
         type="file"
@@ -739,7 +739,7 @@ export const LibraryView: React.FC = () => {
       {/* Delete Playlist Confirmation Modal */}
       {playlistToDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-raised border border-hairline rounded-card p-5 max-w-sm w-full space-y-4 shadow-elevated">
+          <div className="bg-surface-elevated border border-hairline rounded-card p-5 max-w-sm w-full space-y-4 shadow-subtle">
             <div className="flex items-center gap-2 text-semantic-error">
               <Trash2 className="w-5 h-5" />
               <h3 className="text-sm font-semibold text-text-primary">Delete Playlist</h3>
@@ -771,7 +771,7 @@ export const LibraryView: React.FC = () => {
       {/* Delete Song Confirmation Modal */}
       {songToDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-raised border border-hairline rounded-card p-5 max-w-sm w-full space-y-4 shadow-elevated">
+          <div className="bg-surface-elevated border border-hairline rounded-card p-5 max-w-sm w-full space-y-4 shadow-subtle">
             <div className="flex items-center gap-2 text-semantic-error">
               <Trash2 className="w-5 h-5" />
               <h3 className="text-sm font-semibold text-text-primary">
@@ -815,7 +815,7 @@ export const LibraryView: React.FC = () => {
       {/* Download Online Songs to Local Modal */}
       {isDownloadModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-raised border border-hairline rounded-card p-6 max-w-xl w-full space-y-4 shadow-elevated max-h-[85vh] flex flex-col">
+          <div className="bg-surface-elevated border border-hairline rounded-card p-6 max-w-xl w-full space-y-4 shadow-subtle max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between pb-2 border-b border-hairline">
               <div className="flex items-center gap-2">
                 <Download className="w-5 h-5 text-accent" />

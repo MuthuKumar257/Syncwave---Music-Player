@@ -12,7 +12,10 @@ export const BottomNav: React.FC = () => {
   ];
 
   return (
-    <nav className="md:hidden flex items-center justify-around h-13 bg-surface-deepest border-t border-hairline px-1 z-40 shrink-0 select-none pb-[max(env(safe-area-inset-bottom),4px)]">
+    <nav
+      aria-label="Mobile navigation"
+      className="md:hidden flex items-center justify-around h-14 bg-surface-deepest/95 backdrop-blur-md border-t border-hairline px-1 z-40 shrink-0 select-none pb-[max(env(safe-area-inset-bottom,0px),4px)]"
+    >
       {navItems.map((item) => {
         const Icon = item.icon;
         return (
@@ -20,13 +23,13 @@ export const BottomNav: React.FC = () => {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-1 rounded-control text-[10px] transition-colors duration-150 min-h-[44px] ${
-                isActive ? 'text-accent font-bold' : 'text-text-muted hover:text-text-secondary font-medium'
+              `flex-1 flex flex-col items-center justify-center py-1 rounded-control text-[10px] transition-colors duration-150 min-h-[48px] tap-press ${
+                isActive ? 'text-accent font-semibold' : 'text-text-muted hover:text-text-secondary font-medium'
               }`
             }
           >
             <Icon className="w-4 h-4 mb-0.5" />
-            <span>{item.label}</span>
+            <span className="leading-tight">{item.label}</span>
           </NavLink>
         );
       })}

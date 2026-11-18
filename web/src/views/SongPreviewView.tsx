@@ -309,7 +309,7 @@ export const SongPreviewView: React.FC = () => {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 bg-background text-text">
         <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4" />
-        <h2 className="text-base font-semibold text-textSecondary animate-pulse">
+        <h2 className="text-base font-semibold text-text-secondary animate-pulse">
           Loading shared track...
         </h2>
       </div>
@@ -319,11 +319,11 @@ export const SongPreviewView: React.FC = () => {
   if (error || !track) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 bg-background text-text text-center">
-        <div className="w-16 h-16 rounded-full bg-surfaceRaised flex items-center justify-center mb-4 border border-hairline">
-          <Disc className="w-8 h-8 text-textSecondary" />
+        <div className="w-16 h-16 rounded-full bg-surface-elevated flex items-center justify-center mb-4 border border-hairline">
+          <Disc className="w-8 h-8 text-text-secondary" />
         </div>
         <h1 className="text-2xl font-bold mb-2">Song Unavailable</h1>
-        <p className="text-sm text-textSecondary max-w-md mb-6">
+        <p className="text-sm text-text-secondary max-w-md mb-6">
           {error || 'This song link is invalid or may have been removed from the platform.'}
         </p>
         <button
@@ -346,14 +346,14 @@ export const SongPreviewView: React.FC = () => {
       )}
 
       {/* Smart App Banner */}
-      <div className="bg-gradient-to-r from-surfaceRaised via-surfaceHover to-surfaceRaised border-b border-hairline px-4 py-3 flex items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-surface-elevated via-surface-hover to-surface-elevated border-b border-hairline px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center shadow-md flex-shrink-0">
             <Radio className="w-5 h-5 text-black" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-bold text-textPrimary leading-tight">Listen on SyncWave App</p>
-            <p className="text-[11px] text-textSecondary truncate">
+            <p className="text-xs font-bold text-text-primary leading-tight">Listen on SyncWave App</p>
+            <p className="text-[11px] text-text-secondary truncate">
               Better background playback, lock-screen controls, and offline downloads
             </p>
           </div>
@@ -371,7 +371,7 @@ export const SongPreviewView: React.FC = () => {
         <div className="mb-6 flex items-center justify-between">
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-xs font-medium text-textSecondary hover:text-textPrimary transition-colors"
+            className="inline-flex items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" /> Back to Home
           </Link>
@@ -383,7 +383,7 @@ export const SongPreviewView: React.FC = () => {
         {/* Hero Card */}
         <div className="bg-surface rounded-2xl border border-hairline p-6 md:p-8 flex flex-col md:flex-row gap-8 items-center md:items-start shadow-xl">
           {/* Artwork */}
-          <div className="relative group w-56 h-56 md:w-64 md:h-64 rounded-xl overflow-hidden shadow-2xl flex-shrink-0 bg-surfaceRaised border border-hairline">
+          <div className="relative group w-56 h-56 md:w-64 md:h-64 rounded-xl overflow-hidden shadow-2xl flex-shrink-0 bg-surface-elevated border border-hairline">
             <img
               src={
                 track.artworkUrl ||
@@ -410,14 +410,14 @@ export const SongPreviewView: React.FC = () => {
 
           {/* Details */}
           <div className="flex-1 flex flex-col text-center md:text-left min-w-0">
-            <h1 className="text-2xl md:text-3xl font-semibold text-textPrimary tracking-tight mb-1.5">
+            <h1 className="text-2xl md:text-3xl font-semibold text-text-primary tracking-tight mb-1.5">
               {track.title}
             </h1>
             <p className="text-base md:text-lg font-medium text-accent mb-1">
               {track.composer || track.artist}
             </p>
             {track.movieName || track.album ? (
-              <p className="text-xs md:text-sm text-textSecondary mb-3">
+              <p className="text-xs md:text-sm text-text-secondary mb-3">
                 {track.movieName ? `Soundtrack • ${track.movieName}` : `Album • ${track.album}`}
               </p>
             ) : null}
@@ -425,14 +425,14 @@ export const SongPreviewView: React.FC = () => {
             {/* Badges */}
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-5">
               {track.language ? (
-                <span className="px-2.5 py-0.5 rounded-control text-xs font-medium bg-surfaceRaised border border-hairline text-textSecondary font-mono">
+                <span className="px-2.5 py-0.5 rounded-control text-xs font-medium bg-surface-elevated border border-hairline text-text-secondary font-mono">
                   {track.language}
                 </span>
               ) : null}
-              <span className="px-2.5 py-0.5 rounded-control text-xs font-medium bg-surfaceRaised border border-hairline text-textSecondary font-mono tabular-nums">
+              <span className="px-2.5 py-0.5 rounded-control text-xs font-medium bg-surface-elevated border border-hairline text-text-secondary font-mono tabular-nums">
                 {formatDuration(track.durationMs)}
               </span>
-              <span className="px-2.5 py-0.5 rounded-control text-xs font-medium bg-surfaceRaised border border-hairline text-textSecondary">
+              <span className="px-2.5 py-0.5 rounded-control text-xs font-medium bg-surface-elevated border border-hairline text-text-secondary">
                 Full Fidelity
               </span>
             </div>
@@ -456,7 +456,7 @@ export const SongPreviewView: React.FC = () => {
 
               <button
                 onClick={handleOpenInApp}
-                className="px-4 py-2.5 bg-surfaceRaised text-textPrimary border border-hairline font-medium rounded-control hover:bg-surfaceHover transition flex items-center gap-2 tap-press"
+                className="px-4 py-2.5 bg-surface-elevated text-text-primary border border-hairline font-medium rounded-control hover:bg-surface-hover transition flex items-center gap-2 tap-press"
               >
                 <Smartphone className="w-4 h-4 text-accent" /> Open in App
               </button>
@@ -469,7 +469,7 @@ export const SongPreviewView: React.FC = () => {
                   className={`p-2.5 rounded-control border border-hairline transition flex items-center justify-center tap-press ${
                     isMenuOpen
                       ? 'bg-accent text-black border-accent'
-                      : 'bg-surfaceRaised text-textSecondary hover:text-textPrimary hover:bg-surfaceHover'
+                      : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface-hover'
                   }`}
                   aria-label="Song options"
                   title="Song options"
@@ -493,7 +493,7 @@ export const SongPreviewView: React.FC = () => {
                     >
                       {/* Song Preview Header in Menu */}
                       <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.04] border border-white/5 mb-1">
-                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-surfaceRaised shrink-0 border border-hairline">
+                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-surface-elevated shrink-0 border border-hairline">
                           <img
                             src={
                               track.artworkUrl ||
@@ -504,8 +504,8 @@ export const SongPreviewView: React.FC = () => {
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-semibold text-textPrimary truncate">{track.title}</p>
-                          <p className="text-[10px] text-textSecondary truncate">{track.artist}</p>
+                          <p className="text-[11px] font-semibold text-text-primary truncate">{track.title}</p>
+                          <p className="text-[10px] text-text-secondary truncate">{track.artist}</p>
                         </div>
                       </div>
 
@@ -513,7 +513,7 @@ export const SongPreviewView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handlePlayNow}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-textPrimary hover:text-white hover:bg-white/10 transition-colors group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-text-primary hover:text-white hover:bg-white/10 transition-colors group"
                       >
                         <Play className="w-4 h-4 text-accent shrink-0 fill-accent" />
                         <span className="truncate">Play Now</span>
@@ -523,7 +523,7 @@ export const SongPreviewView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handlePlayNext}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-textPrimary hover:text-white hover:bg-white/10 transition-colors group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-text-primary hover:text-white hover:bg-white/10 transition-colors group"
                       >
                         <ListPlus className="w-4 h-4 text-white/80 group-hover:text-white shrink-0" />
                         <span className="truncate">Play Next</span>
@@ -533,7 +533,7 @@ export const SongPreviewView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAddToQueue}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-textPrimary hover:text-white hover:bg-white/10 transition-colors group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-text-primary hover:text-white hover:bg-white/10 transition-colors group"
                       >
                         <ListEnd className="w-4 h-4 text-white/80 group-hover:text-white shrink-0" />
                         <span className="truncate">Add to Queue</span>
@@ -543,7 +543,7 @@ export const SongPreviewView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleToggleFavourite}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-textPrimary hover:text-white hover:bg-white/10 transition-colors group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-text-primary hover:text-white hover:bg-white/10 transition-colors group"
                       >
                         <Heart
                           className={`w-4 h-4 shrink-0 ${
@@ -559,7 +559,7 @@ export const SongPreviewView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAddToPlaylist}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-textPrimary hover:text-white hover:bg-white/10 transition-colors group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-text-primary hover:text-white hover:bg-white/10 transition-colors group"
                       >
                         <FolderPlus className="w-4 h-4 text-white/80 group-hover:text-white shrink-0" />
                         <span className="truncate">Add to Playlist</span>
@@ -570,7 +570,7 @@ export const SongPreviewView: React.FC = () => {
                         type="button"
                         onClick={handleDownload}
                         disabled={isDownloading}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-textPrimary hover:text-white hover:bg-white/10 transition-colors group disabled:opacity-50"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-text-primary hover:text-white hover:bg-white/10 transition-colors group disabled:opacity-50"
                       >
                         {isDownloading ? (
                           <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" />
@@ -592,7 +592,7 @@ export const SongPreviewView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleShareSong}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-textPrimary hover:text-white hover:bg-white/10 transition-colors group"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-text-primary hover:text-white hover:bg-white/10 transition-colors group"
                       >
                         <Share2 className="w-4 h-4 text-white/80 group-hover:text-white shrink-0" />
                         <span className="truncate">Share Song</span>
@@ -605,7 +605,7 @@ export const SongPreviewView: React.FC = () => {
               {/* Quick Share Button */}
               <button
                 onClick={handleShare}
-                className="p-3 bg-surfaceRaised text-textSecondary hover:text-textPrimary border border-hairline rounded-full hover:bg-surfaceHover transition-colors"
+                className="p-3 bg-surface-elevated text-text-secondary hover:text-text-primary border border-hairline rounded-full hover:bg-surface-hover transition-colors"
                 title="Share this song"
               >
                 <Share2 className="w-5 h-5" />
@@ -614,13 +614,13 @@ export const SongPreviewView: React.FC = () => {
 
             {/* App Store / Play Store Install Badges */}
             <div className="pt-4 border-t border-hairline flex flex-col sm:flex-row items-center justify-center md:justify-start gap-3">
-              <span className="text-xs text-textTertiary font-medium">Get the app for best audio:</span>
+              <span className="text-xs text-text-muted font-medium">Get the app for best audio:</span>
               <div className="flex items-center gap-2">
                 <a
                   href="https://play.google.com/store/apps/details?id=com.syncwave.music"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-black/60 border border-hairline rounded-lg text-xs font-semibold text-textSecondary hover:text-white hover:border-hairlineLight transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-black/60 border border-hairline rounded-lg text-xs font-semibold text-text-secondary hover:text-white hover:border-hairlineLight transition-all flex items-center gap-1.5"
                 >
                   <Download className="w-3.5 h-3.5 text-accent" /> Google Play
                 </a>
@@ -628,7 +628,7 @@ export const SongPreviewView: React.FC = () => {
                   href="https://apps.apple.com/app/syncwave-music/id123456789"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-black/60 border border-hairline rounded-lg text-xs font-semibold text-textSecondary hover:text-white hover:border-hairlineLight transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-black/60 border border-hairline rounded-lg text-xs font-semibold text-text-secondary hover:text-white hover:border-hairlineLight transition-all flex items-center gap-1.5"
                 >
                   <Download className="w-3.5 h-3.5 text-accent" /> App Store
                 </a>

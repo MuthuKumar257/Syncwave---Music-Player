@@ -154,7 +154,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ embedded = false }) 
   };
 
   return (
-    <div className={embedded ? 'space-y-6 max-w-3xl select-none' : 'flex-1 overflow-y-auto p-6 md:p-8 space-y-6 max-w-3xl select-none'}>
+    <div className={embedded ? 'space-y-5 md:space-y-6 max-w-3xl select-none' : 'flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-6 max-w-3xl select-none pb-20 md:pb-8'}>
       {/* Onboarding Dialog */}
       {!embedded && <OnboardingModal isOpen={isOnboardingOpen} onClose={closeOnboarding} />}
 

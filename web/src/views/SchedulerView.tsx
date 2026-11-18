@@ -179,7 +179,7 @@ export const SchedulerView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 select-none">
+    <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-8 space-y-5 md:space-y-6 select-none pb-20 md:pb-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -363,7 +363,7 @@ export const SchedulerView: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 bg-surface-elevated p-2 rounded-control border border-hairline">
+                <div className="flex flex-wrap items-center gap-2 bg-surface-elevated p-2 rounded-control border border-hairline">
                   {/* Hours 1-12 */}
                   <select
                     aria-label="Hour"

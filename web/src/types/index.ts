@@ -344,6 +344,7 @@ export interface PersonalizedFeed {
   similarToFavouriteSongs?: UnifiedTrack[];
   trendingInLanguages: UnifiedTrack[];
   newReleases: UnifiedTrack[];
+  recentlyAdded?: UnifiedTrack[];
   discoverSomethingNew?: UnifiedTrack[];
   yourMoodMix?: MoodPlaylistCard[];
   continueListening: UnifiedTrack[];

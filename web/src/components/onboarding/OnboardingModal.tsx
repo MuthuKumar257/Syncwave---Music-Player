@@ -267,24 +267,24 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-[#141415] border border-[rgba(237,237,237,0.08)] rounded-[14px] shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-3xl max-h-[92vh] flex flex-col bg-[#141415] border border-[rgba(237,237,237,0.08)] rounded-[14px] shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(237,237,237,0.08)] bg-[#141415]/90">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-[8px] bg-[#19191B] border border-[rgba(237,237,237,0.08)] flex items-center justify-center text-[#F59E0B]">
-              {step === 1 ? <Globe2 className="w-5 h-5" /> : step === 2 ? <Users className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[rgba(237,237,237,0.08)] bg-[#141415]/90 gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-[8px] bg-[#19191B] border border-[rgba(237,237,237,0.08)] flex items-center justify-center text-[#F59E0B] shrink-0">
+              {step === 1 ? <Globe2 className="w-4 h-4 sm:w-5 sm:h-5" /> : step === 2 ? <Users className="w-4 h-4 sm:w-5 sm:h-5" /> : <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />}
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-[#EDEDED]">
+                <h2 className="text-sm sm:text-base font-semibold text-[#EDEDED] truncate">
                   {step === 1 ? 'Music Languages' : step === 2 ? 'Artists & Directors' : 'Genres & Moods'}
                 </h2>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-[4px] bg-[#19191B] text-[#A1A1A6] border border-[rgba(237,237,237,0.08)]">
-                  Step {step} of 3
+                <span className="text-[10px] sm:text-[11px] font-mono px-1.5 sm:px-2 py-0.5 rounded-[4px] bg-[#19191B] text-[#A1A1A6] border border-[rgba(237,237,237,0.08)] shrink-0">
+                  Step {step}/3
                 </span>
               </div>
-              <p className="text-xs text-[#A1A1A6]">
+              <p className="text-[11px] sm:text-xs text-[#A1A1A6] truncate">
                 {step === 1
                   ? 'Choose your primary music languages to tailor your discovery feed'
                   : step === 2
@@ -295,15 +295,16 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
           </div>
           <button
             onClick={handleSkip}
-            className="p-1.5 rounded-[8px] text-[#85858B] hover:text-[#EDEDED] hover:bg-[#19191B] transition-colors"
+            className="p-1.5 rounded-[8px] text-[#85858B] hover:text-[#EDEDED] hover:bg-[#19191B] transition-colors shrink-0"
             title="Skip onboarding"
+            aria-label="Skip onboarding"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-6">
           {step === 1 ? (
             /* ========================================================= */
             /* STEP 1: LANGUAGE SELECTION                                */
@@ -353,10 +354,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
               {/* Top Controls: Filter Pills and Search */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-2 rounded-[10px] bg-[#19191B] border border-[rgba(237,237,237,0.08)]">
                 {/* Filter Tabs */}
-                <div className="flex items-center gap-1.5 p-1 bg-[#141415] rounded-[8px] border border-[rgba(237,237,237,0.08)]">
+                <div className="flex items-center gap-1.5 p-1 bg-[#141415] rounded-[8px] border border-[rgba(237,237,237,0.08)] overflow-x-auto scrollbar-none">
                   <button
                     onClick={() => setActiveTab('ALL')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium transition-all shrink-0 ${
                       activeTab === 'ALL'
                         ? 'bg-[#232325] text-[#EDEDED] shadow-sm'
                         : 'text-[#85858B] hover:text-[#EDEDED]'
@@ -368,7 +369,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
 
                   <button
                     onClick={() => setActiveTab('DIRECTORS')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium transition-all shrink-0 ${
                       activeTab === 'DIRECTORS'
                         ? 'bg-[#232325] text-[#EDEDED] shadow-sm'
                         : 'text-[#85858B] hover:text-[#EDEDED]'
@@ -380,7 +381,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
 
                   <button
                     onClick={() => setActiveTab('SINGERS')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-xs font-medium transition-all shrink-0 ${
                       activeTab === 'SINGERS'
                         ? 'bg-[#232325] text-[#EDEDED] shadow-sm'
                         : 'text-[#85858B] hover:text-[#EDEDED]'
@@ -599,19 +600,19 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
         </div>
 
         {/* Fixed Bottom Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[rgba(237,237,237,0.08)] bg-[#141415]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-[rgba(237,237,237,0.08)] bg-[#141415]">
           <button
             onClick={handleSkip}
-            className="text-xs font-medium text-[#85858B] hover:text-[#EDEDED] transition-colors"
+            className="text-xs font-medium text-[#85858B] hover:text-[#EDEDED] transition-colors order-2 sm:order-1 text-center sm:text-left py-1"
           >
             Skip for now
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 order-1 sm:order-2 justify-end flex-wrap sm:flex-nowrap w-full sm:w-auto">
             {step === 2 && (
               <button
                 onClick={() => setStep(1)}
-                className="px-4 py-2 rounded-[8px] text-xs font-medium text-[#A1A1A6] hover:text-[#EDEDED] hover:bg-[#19191B] border border-[rgba(237,237,237,0.08)] transition-colors"
+                className="flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-[8px] text-xs font-medium text-[#A1A1A6] hover:text-[#EDEDED] hover:bg-[#19191B] border border-[rgba(237,237,237,0.08)] transition-colors text-center"
               >
                 Back to Languages
               </button>
@@ -620,7 +621,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
             {step === 3 && (
               <button
                 onClick={() => setStep(2)}
-                className="px-4 py-2 rounded-[8px] text-xs font-medium text-[#A1A1A6] hover:text-[#EDEDED] hover:bg-[#19191B] border border-[rgba(237,237,237,0.08)] transition-colors"
+                className="flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-[8px] text-xs font-medium text-[#A1A1A6] hover:text-[#EDEDED] hover:bg-[#19191B] border border-[rgba(237,237,237,0.08)] transition-colors text-center"
               >
                 Back to Artists
               </button>
@@ -630,7 +631,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
               <button
                 onClick={() => setStep(2)}
                 disabled={selectedLanguages.length === 0}
-                className="flex items-center gap-2 px-5 py-2 rounded-[8px] text-xs font-semibold bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90 disabled:opacity-50 transition-all shadow-sm"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2 rounded-[8px] text-xs font-semibold bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90 disabled:opacity-50 transition-all shadow-sm"
               >
                 <span>Continue to Artists</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -639,17 +640,17 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen: propIs
               <button
                 onClick={() => setStep(3)}
                 disabled={selectedArtists.length === 0}
-                className="flex items-center gap-2 px-5 py-2 rounded-[8px] text-xs font-semibold bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90 disabled:opacity-50 transition-all shadow-sm"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2 rounded-[8px] text-xs font-semibold bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90 disabled:opacity-50 transition-all shadow-sm"
               >
-                <span>Continue to Genres & Moods</span>
+                <span>Continue to Genres</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             ) : (
               <button
                 onClick={handleFinish}
-                className="flex items-center gap-2 px-5 py-2 rounded-[8px] text-xs font-semibold bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90 transition-all shadow-sm"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2 rounded-[8px] text-xs font-semibold bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90 transition-all shadow-sm"
               >
-                <span>Save Preferences & Explore</span>
+                <span>Save Preferences</span>
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
               </button>
             )}

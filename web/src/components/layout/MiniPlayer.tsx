@@ -141,26 +141,27 @@ export const MiniPlayer: React.FC = () => {
 
       {/* ========================================================= */}
       {/* 2A. MOBILE COMPACT PLAYER CONTROLS ROW (md:hidden)        */}
-      {/* Aligned single horizontal row with compact icons          */}
+      {/* Aligned single horizontal row with responsive controls    */}
       {/* ========================================================= */}
-      <div className="flex md:hidden items-center justify-between h-11 gap-1">
+      <div className="flex md:hidden items-center justify-between h-12 gap-2 min-w-0">
         {/* Left: Small Song Thumbnail & Title */}
         <div
-          className="flex items-center gap-2 min-w-0 flex-1 max-w-[130px] sm:max-w-[160px] cursor-pointer"
+          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
           onClick={() => currentSong && setNowPlayingOpen(true)}
+          title="Open full player"
         >
-          <div className="w-8 h-8 rounded-control bg-surface-elevated overflow-hidden shrink-0 relative flex items-center justify-center border border-hairline">
+          <div className="w-9 h-9 rounded-control bg-surface-elevated overflow-hidden shrink-0 relative flex items-center justify-center border border-hairline">
             {currentSong ? (
               <ArtworkImage
                 src={currentSong.artworkUrl}
                 alt={currentSong.title}
-                iconClassName="w-3.5 h-3.5 text-text-muted"
+                iconClassName="w-4 h-4 text-text-muted"
               />
             ) : (
-              <Music className="w-3.5 h-3.5 text-text-muted" />
+              <Music className="w-4 h-4 text-text-muted" />
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 pr-1">
             <p className="text-xs font-semibold text-text-primary truncate leading-tight">
               {currentSong?.title || 'Remote Session'}
             </p>
@@ -170,113 +171,76 @@ export const MiniPlayer: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Horizontally Aligned Compact Controls */}
-        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-          {/* Download Button */}
-          <button
-            onClick={handleDownload}
-            disabled={isDownloading || downloaded || !currentSong}
-            className={`p-1 rounded-control transition-colors ${
-              downloaded ? 'text-emerald-400' : 'text-text-muted hover:text-text-primary'
-            }`}
-            title={downloaded ? 'Downloaded offline' : 'Download song'}
-          >
-            {isDownloading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-            ) : downloaded ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-          </button>
-
+        {/* Right: Horizontally Aligned Touch Controls */}
+        <div className="flex items-center gap-1 shrink-0">
           {/* Favourite Button */}
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               if (currentSong) toggleFavorite(currentSong.id);
             }}
-            className="p-1 rounded-control text-text-muted hover:text-text-primary transition-colors"
+            className="p-1.5 rounded-control text-text-muted hover:text-text-primary transition-colors tap-press"
             title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >
             <Heart
-              className={`w-3.5 h-3.5 ${
+              className={`w-4 h-4 ${
                 isFav ? 'text-accent fill-accent' : 'text-text-muted'
               }`}
             />
           </button>
 
-          {/* Previous Song */}
+          {/* Previous Song (shown on screens >= 360px) */}
           <button
+            type="button"
             onClick={playPrevious}
-            className="p-1 rounded-control text-text-muted hover:text-text-primary transition-colors"
+            className="hidden sm:inline-flex p-1.5 rounded-control text-text-muted hover:text-text-primary transition-colors tap-press"
             title="Previous song"
+            aria-label="Previous song"
           >
             <SkipBack className="w-3.5 h-3.5 fill-current" />
           </button>
 
           {/* Play / Pause Button (Prominent) */}
           <button
+            type="button"
             onClick={togglePlay}
-            className="w-7 h-7 rounded-full bg-accent text-black hover:brightness-110 flex items-center justify-center transition-all active:scale-95 shadow-subtle shrink-0"
+            className="w-8 h-8 rounded-full bg-accent text-black hover:brightness-110 flex items-center justify-center transition-all active:scale-95 shadow-subtle shrink-0 tap-press"
             title={isPlaying ? 'Pause' : 'Play'}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
-              <Pause className="w-3.5 h-3.5 fill-current" />
+              <Pause className="w-4 h-4 fill-current" />
             ) : (
-              <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+              <Play className="w-4 h-4 fill-current ml-0.5" />
             )}
           </button>
 
           {/* Next Song */}
           <button
+            type="button"
             onClick={playNext}
-            className="p-1 rounded-control text-text-muted hover:text-text-primary transition-colors"
+            className="p-1.5 rounded-control text-text-muted hover:text-text-primary transition-colors tap-press"
             title="Next song"
+            aria-label="Next song"
           >
             <SkipForward className="w-3.5 h-3.5 fill-current" />
-          </button>
-
-          {/* Sleep Timer */}
-          <button
-            type="button"
-            onClick={() => setShowSleepTimerModal(true)}
-            className={`p-1 rounded-control transition-colors ${
-              sleepTimerRemainingSec > 0
-                ? 'text-accent'
-                : 'text-text-muted hover:text-text-primary'
-            }`}
-            title="Sleep timer"
-          >
-            <Moon className="w-3.5 h-3.5" />
           </button>
 
           {/* Queue Button */}
           <button
             type="button"
             onClick={() => setQueueOpen(!isQueueOpen)}
-            className={`p-1 rounded-control transition-colors ${
+            className={`p-1.5 rounded-control transition-colors tap-press ${
               isQueueOpen
                 ? 'text-accent'
                 : 'text-text-muted hover:text-text-primary'
             }`}
             title="Queue"
+            aria-label="Toggle playback queue"
           >
-            <ListMusic className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Device / Audio Output */}
-          <button
-            type="button"
-            onClick={() => setDevicePickerOpen(true)}
-            className={`p-1 rounded-control transition-colors ${
-              isRemoteMode
-                ? 'text-accent'
-                : 'text-text-muted hover:text-text-primary'
-            }`}
-            title="Audio output devices"
-          >
-            <MonitorSpeaker className="w-3.5 h-3.5" />
+            <ListMusic className="w-4 h-4" />
           </button>
         </div>
       </div>

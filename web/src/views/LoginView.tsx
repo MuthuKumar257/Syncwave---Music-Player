@@ -207,13 +207,13 @@ export const LoginView: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-8 sm:py-12 flex items-center justify-center">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
+    <div className="flex-1 overflow-y-auto px-3.5 sm:px-6 py-6 sm:py-10 flex items-center justify-center pb-24 md:pb-10">
+      <div className="w-full max-w-md space-y-5 sm:space-y-6">
+        <div className="text-center space-y-1.5 sm:space-y-2">
           <div className="inline-flex items-center justify-center w-11 h-11 rounded-card bg-surface-elevated border border-hairline">
             <Disc3 className="w-5 h-5 text-accent" />
           </div>
-          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-semibold text-text-primary tracking-tight">
             Sign in to SyncWave
           </h1>
           <p className="text-xs text-text-muted">
@@ -221,7 +221,7 @@ export const LoginView: React.FC = () => {
           </p>
         </div>
 
-        <div className="rounded-card bg-surface border border-hairline p-6 sm:p-7 space-y-5">
+        <div className="rounded-card bg-surface border border-hairline p-4 sm:p-6 md:p-7 space-y-5">
           {showForgotPassword ? (
             <div className="space-y-4">
               <div className="flex items-center gap-2">

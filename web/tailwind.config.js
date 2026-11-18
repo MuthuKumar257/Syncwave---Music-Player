@@ -7,6 +7,9 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      screens: {
+        'xs': '360px',
+      },
       colors: {
         // Unslop Graphite Ramp (Craft & Restraint)
         background: '#141415',

@@ -70,7 +70,7 @@ export const SaveToPlaylistModal: React.FC<SaveToPlaylistModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-[#18181b] border border-hairline rounded-card p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 text-left select-none relative"
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#18181b] border border-hairline rounded-card p-4 sm:p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 text-left select-none relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

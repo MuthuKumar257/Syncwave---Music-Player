@@ -10,12 +10,27 @@ import {
 } from '../types';
 import { useAnalyticsStore } from './useAnalyticsStore';
 
+export interface BaseHomeSections {
+  recommended: UnifiedTrack[];
+  trending: UnifiedTrack[];
+  recentlyAdded: UnifiedTrack[];
+  popularSongs: UnifiedTrack[];
+  allAvailable: UnifiedTrack[];
+  languages?: string[];
+  requiresLanguageSelection?: boolean;
+}
+
 interface RecommendationStore {
   feed: PersonalizedFeed | null;
+  baseSections: BaseHomeSections | null;
+  baseCatalogue: UnifiedTrack[];
   preferences: UserMusicPreference | null;
   isLoading: boolean;
+  isLoadingBase: boolean;
   isRefreshing: boolean;
   feedError: string | null;
+  baseError: string | null;
+  sectionErrors: Record<string, string>;
   lastRefreshedAt: number | null;
   hasCompletedOnboarding: boolean;
   isOnboardingOpen: boolean;
@@ -25,6 +40,9 @@ interface RecommendationStore {
 
   // Actions
   fetchFeed: (languageOverride?: string, options?: { isPullRefresh?: boolean; force?: boolean }) => Promise<void>;
+  fetchBaseFeed: (languageOverride?: string) => Promise<void>;
+  retryFeed: () => Promise<void>;
+  retrySection: (sectionKey: string) => Promise<void>;
   refreshHome: () => Promise<void>;
   fetchPreferences: () => Promise<void>;
   updatePreferences: (updates: Partial<UserMusicPreference>) => Promise<void>;
@@ -51,6 +69,7 @@ interface RecommendationStore {
 
 const ONBOARDING_STORAGE_KEY = 'syncwave_onboarding_completed_v1';
 const FEED_CACHE_STORAGE_KEY = 'syncwave_home_feed_cache_v1';
+const BASE_FEED_CACHE_STORAGE_KEY = 'syncwave_home_base_cache_v1';
 
 const loadCachedFeed = (): PersonalizedFeed | null => {
   try {
@@ -59,6 +78,18 @@ const loadCachedFeed = (): PersonalizedFeed | null => {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { feed?: PersonalizedFeed };
     return parsed?.feed || null;
+  } catch {
+    return null;
+  }
+};
+
+const loadCachedBaseSections = (): BaseHomeSections | null => {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(BASE_FEED_CACHE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { sections?: BaseHomeSections };
+    return parsed?.sections || null;
   } catch {
     return null;
   }
@@ -76,7 +107,20 @@ const saveCachedFeed = (feed: PersonalizedFeed) => {
   }
 };
 
+const saveCachedBaseSections = (sections: BaseHomeSections) => {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(
+      BASE_FEED_CACHE_STORAGE_KEY,
+      JSON.stringify({ savedAt: Date.now(), sections })
+    );
+  } catch {
+    // Ignore storage quota errors
+  }
+};
+
 let inFlightFeedRequest: Promise<void> | null = null;
+let inFlightBaseRequest: Promise<void> | null = null;
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
@@ -86,297 +130,400 @@ const getAuthHeaders = (): Record<string, string> => {
   };
 };
 
-export const useRecommendationStore = create<RecommendationStore>((set, get) => ({
-  feed: loadCachedFeed(),
-  preferences: null,
-  isLoading: false,
-  isRefreshing: false,
-  feedError: null,
-  lastRefreshedAt: null,
-  hasCompletedOnboarding: typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_STORAGE_KEY) === 'true',
-  isOnboardingOpen: typeof localStorage === 'undefined' ? false : localStorage.getItem(ONBOARDING_STORAGE_KEY) !== 'true',
-  activeLanguageFilter: 'ALL',
-  hiddenTrackIds: new Set(),
-  likedTrackIds: new Set(),
+export const useRecommendationStore = create<RecommendationStore>((set, get) => {
+  const initialBase = loadCachedBaseSections();
 
-  fetchFeed: async (languageOverride?: string, options?: { isPullRefresh?: boolean; force?: boolean }) => {
-    // Prevent multiple simultaneous refresh/fetch requests
-    if (inFlightFeedRequest) {
-      return inFlightFeedRequest;
-    }
+  return {
+    feed: loadCachedFeed(),
+    baseSections: initialBase,
+    baseCatalogue: initialBase?.allAvailable || [],
+    preferences: null,
+    isLoading: false,
+    isLoadingBase: false,
+    isRefreshing: false,
+    feedError: null,
+    baseError: null,
+    sectionErrors: {},
+    lastRefreshedAt: null,
+    hasCompletedOnboarding: typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_STORAGE_KEY) === 'true',
+    isOnboardingOpen: typeof localStorage === 'undefined' ? false : localStorage.getItem(ONBOARDING_STORAGE_KEY) !== 'true',
+    activeLanguageFilter: 'ALL',
+    hiddenTrackIds: new Set(),
+    likedTrackIds: new Set(),
 
-    const isPullRefresh = Boolean(options?.isPullRefresh);
-    const hasExistingFeed = Boolean(get().feed);
-    set({
-      isLoading: !hasExistingFeed && !isPullRefresh,
-      isRefreshing: isPullRefresh,
-      feedError: null
-    });
+    fetchBaseFeed: async (languageOverride?: string) => {
+      if (inFlightBaseRequest) return inFlightBaseRequest;
 
-    const requestTask = (async () => {
+      set({ isLoadingBase: true, baseError: null });
+
+      const task = (async () => {
+        try {
+          const lang = languageOverride || get().activeLanguageFilter;
+          const params = new URLSearchParams();
+          if (lang && lang !== 'ALL') {
+            params.set('language', lang);
+          }
+          const qs = params.toString();
+          const res = await fetch(`/api/songs/home-base${qs ? `?${qs}` : ''}`, {
+            headers: getAuthHeaders()
+          });
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+          const json = await res.json();
+          if (json.success && json.data) {
+            saveCachedBaseSections(json.data);
+            set({
+              baseSections: json.data,
+              baseCatalogue: json.data.allAvailable || [],
+              baseError: null,
+              sectionErrors: { ...get().sectionErrors, baseFeed: '' }
+            });
+            console.log(
+              `[HomeDiagnostics:WebStore] Base feed loaded: ${json.data.allAvailable?.length || 0} tracks, Trending: ${
+                json.data.trending?.length || 0
+              }`
+            );
+          } else {
+            throw new Error(json.message || 'Invalid base catalogue payload');
+          }
+        } catch (err: any) {
+          console.warn('[useRecommendationStore] Failed to fetch base feed:', err);
+          set({
+            baseError: err?.message || 'Unable to reach music catalogue service',
+            sectionErrors: { ...get().sectionErrors, baseFeed: err?.message || 'Error loading catalogue' }
+          });
+        } finally {
+          inFlightBaseRequest = null;
+          set({ isLoadingBase: false });
+        }
+      })();
+
+      inFlightBaseRequest = task;
+      return task;
+    },
+
+    fetchFeed: async (languageOverride?: string, options?: { isPullRefresh?: boolean; force?: boolean }) => {
+      // Trigger base catalogue fetch in parallel so songs are guaranteed available
+      get().fetchBaseFeed(languageOverride).catch(() => {});
+
+      // Prevent multiple simultaneous refresh/fetch requests
+      if (inFlightFeedRequest) {
+        return inFlightFeedRequest;
+      }
+
+      const isPullRefresh = Boolean(options?.isPullRefresh);
+      const hasExistingFeed = Boolean(get().feed);
+      set({
+        isLoading: !hasExistingFeed && !isPullRefresh,
+        isRefreshing: isPullRefresh,
+        feedError: null
+      });
+
+      const requestTask = (async () => {
+        try {
+          const lang = languageOverride || get().activeLanguageFilter;
+          const params = new URLSearchParams();
+          if (lang && lang !== 'ALL') {
+            params.set('language', lang);
+          }
+          if (isPullRefresh || options?.force) {
+            params.set('seed', String(Date.now()));
+          }
+          const qs = params.toString();
+          const res = await fetch(`/api/recommendations${qs ? `?${qs}` : ''}`, {
+            headers: getAuthHeaders()
+          });
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+          const json = await res.json();
+          if (json.success && json.data) {
+            saveCachedFeed(json.data);
+            const needsLanguage = Boolean(json.data.requiresLanguageSelection);
+            set({
+              feed: json.data,
+              lastRefreshedAt: Date.now(),
+              feedError: null,
+              sectionErrors: { ...get().sectionErrors, recommendations: '' },
+              ...(needsLanguage ? { isOnboardingOpen: true, hasCompletedOnboarding: false } : {})
+            });
+          } else {
+            throw new Error(json.message || 'Invalid recommendation payload');
+          }
+        } catch (err: any) {
+          console.warn('[useRecommendationStore] Failed to fetch feed:', err);
+          set({
+            feedError: err?.message || 'Unable to reach recommendation service',
+            sectionErrors: { ...get().sectionErrors, recommendations: err?.message || 'Error loading recommendations' }
+          });
+        } finally {
+          inFlightFeedRequest = null;
+          set({ isLoading: false, isRefreshing: false });
+        }
+      })();
+
+      inFlightFeedRequest = requestTask;
+      return requestTask;
+    },
+
+    retryFeed: async () => {
+      await Promise.all([
+        get().fetchFeed(undefined, { force: true }),
+        get().fetchBaseFeed()
+      ]);
+    },
+
+    retrySection: async (sectionKey: string) => {
+      if (sectionKey === 'recommendations' || sectionKey === 'madeForYou') {
+        await get().fetchFeed(undefined, { force: true });
+      } else if (sectionKey === 'preferences') {
+        await get().fetchPreferences();
+      } else {
+        await get().fetchBaseFeed();
+      }
+    },
+
+    refreshHome: async () => {
+      if (inFlightFeedRequest || get().isRefreshing) {
+        return inFlightFeedRequest || Promise.resolve();
+      }
+      await Promise.all([
+        get().fetchPreferences(),
+        get().fetchFeed(undefined, { isPullRefresh: true, force: true }),
+        get().fetchBaseFeed()
+      ]);
+    },
+
+    fetchPreferences: async () => {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+      if (!token) {
+        set({ preferences: null });
+        return;
+      }
+
       try {
-        const lang = languageOverride || get().activeLanguageFilter;
-        const params = new URLSearchParams();
-        if (lang && lang !== 'ALL') {
-          params.set('language', lang);
-        }
-        if (isPullRefresh || options?.force) {
-          params.set('seed', String(Date.now()));
-        }
-        const qs = params.toString();
-        const res = await fetch(`/api/recommendations${qs ? `?${qs}` : ''}`, {
+        const res = await fetch('/api/users/me/preferences', {
           headers: getAuthHeaders()
         });
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const json = await res.json();
-        if (json.success && json.data) {
-          saveCachedFeed(json.data);
-          const needsLanguage = Boolean(json.data.requiresLanguageSelection);
-          set({
-            feed: json.data,
-            lastRefreshedAt: Date.now(),
-            feedError: null,
-            ...(needsLanguage ? { isOnboardingOpen: true, hasCompletedOnboarding: false } : {})
-          });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.preferences) {
+            const hasLangs = Boolean(
+              json.preferences.preferredLanguages && json.preferences.preferredLanguages.length > 0
+            );
+            set({
+              preferences: json.preferences,
+              hasCompletedOnboarding: hasLangs,
+              isOnboardingOpen: !hasLangs,
+              sectionErrors: { ...get().sectionErrors, preferences: '' }
+            });
+          }
         } else {
-          throw new Error(json.message || 'Invalid recommendation payload');
+          set({
+            sectionErrors: { ...get().sectionErrors, preferences: `HTTP ${res.status}` }
+          });
         }
       } catch (err: any) {
-        console.warn('[useRecommendationStore] Failed to fetch feed:', err);
+        console.warn('[useRecommendationStore] Failed to fetch preferences:', err);
         set({
-          feedError: err?.message || 'Unable to reach recommendation service'
+          sectionErrors: { ...get().sectionErrors, preferences: err?.message || 'Failed to fetch preferences' }
         });
-      } finally {
-        inFlightFeedRequest = null;
-        set({ isLoading: false, isRefreshing: false });
       }
-    })();
+    },
 
-    inFlightFeedRequest = requestTask;
-    return requestTask;
-  },
+    updatePreferences: async (updates) => {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+      if (!token) return;
 
-  refreshHome: async () => {
-    if (inFlightFeedRequest || get().isRefreshing) {
-      return inFlightFeedRequest || Promise.resolve();
-    }
-    await Promise.all([
-      get().fetchPreferences(),
-      get().fetchFeed(undefined, { isPullRefresh: true, force: true })
-    ]);
-  },
-
-  fetchPreferences: async () => {
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
-    if (!token) {
-      set({ preferences: null });
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/users/me/preferences', {
-        headers: getAuthHeaders()
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.preferences) {
-          const hasLangs = Boolean(
-            json.preferences.preferredLanguages && json.preferences.preferredLanguages.length > 0
-          );
-          set({
-            preferences: json.preferences,
-            hasCompletedOnboarding: hasLangs,
-            isOnboardingOpen: !hasLangs
-          });
+      try {
+        const res = await fetch('/api/users/me/preferences', {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(updates)
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.preferences) {
+            set({ preferences: json.preferences });
+            // Refresh personalized feed and base catalogue with updated preferences
+            get().fetchFeed();
+            get().fetchBaseFeed();
+            // Immediately update analytics dashboard
+            useAnalyticsStore.getState().fetchStats(true).catch(() => {});
+            // Immediately purge old language recommendations from playback queue
+            import('./usePlayerStore').then(m => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
+          }
         }
+      } catch (err) {
+        console.warn('[useRecommendationStore] Failed to update preferences:', err);
       }
-    } catch (err) {
-      console.warn('[useRecommendationStore] Failed to fetch preferences:', err);
-    }
-  },
+    },
 
-  updatePreferences: async (updates) => {
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
-    if (!token) return;
+    resetPreferences: async () => {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+      if (!token) return;
 
-    try {
-      const res = await fetch('/api/users/me/preferences', {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(updates)
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.preferences) {
-          set({ preferences: json.preferences });
-          // Refresh personalized feed with updated preferences
-          get().fetchFeed();
-          // Immediately update analytics dashboard
-          useAnalyticsStore.getState().fetchStats(true).catch(() => {});
+      try {
+        const res = await fetch('/api/users/me/preferences/reset', {
+          method: 'POST',
+          headers: getAuthHeaders()
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success) {
+            set({
+              preferences: json.preferences,
+              hiddenTrackIds: new Set(),
+              likedTrackIds: new Set()
+            });
+            get().fetchFeed();
+            get().fetchBaseFeed();
+            useAnalyticsStore.getState().fetchStats(true).catch(() => {});
+          }
         }
+      } catch (err) {
+        console.warn('[useRecommendationStore] Failed to reset preferences:', err);
       }
-    } catch (err) {
-      console.warn('[useRecommendationStore] Failed to update preferences:', err);
-    }
-  },
+    },
 
-  resetPreferences: async () => {
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
-    if (!token) return;
+    recordSongListeningStat: async (stat) => {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+      if (!token) return;
 
-    try {
-      const res = await fetch('/api/users/me/preferences/reset', {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success) {
-          set({
-            preferences: json.preferences,
-            hiddenTrackIds: new Set(),
-            likedTrackIds: new Set()
-          });
-          get().fetchFeed();
-          useAnalyticsStore.getState().fetchStats(true).catch(() => {});
+      try {
+        await fetch('/api/recommendations/listening-stat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(stat)
+        });
+      } catch {
+        // Background non-blocking
+      }
+    },
+
+    fetchArtistsCatalog: async (options) => {
+      try {
+        const params = new URLSearchParams();
+        if (options?.role) params.set('role', options.role);
+        if (options?.languages && options.languages.length > 0) params.set('languages', options.languages.join(','));
+        if (options?.query) params.set('q', options.query);
+        const res = await fetch(`/api/recommendations/artists?${params.toString()}`, {
+          headers: getAuthHeaders()
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.artists) {
+            return json.artists;
+          }
         }
+      } catch (err) {
+        console.warn('[useRecommendationStore] Failed to fetch artists catalog:', err);
       }
-    } catch (err) {
-      console.warn('[useRecommendationStore] Failed to reset preferences:', err);
-    }
-  },
+      return [];
+    },
 
-  recordSongListeningStat: async (stat) => {
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
-    if (!token) return;
-
-    try {
-      await fetch('/api/recommendations/listening-stat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(stat)
-      });
-    } catch {
-      // Background non-blocking
-    }
-  },
-
-  fetchArtistsCatalog: async (options) => {
-    try {
-      const params = new URLSearchParams();
-      if (options?.role) params.set('role', options.role);
-      if (options?.languages && options.languages.length > 0) params.set('languages', options.languages.join(','));
-      if (options?.query) params.set('q', options.query);
-      const res = await fetch(`/api/recommendations/artists?${params.toString()}`, {
-        headers: getAuthHeaders()
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.artists) {
-          return json.artists;
+    sendFeedback: async (targetId, feedbackType, targetType = 'SONG') => {
+      try {
+        if (feedbackType === 'HIDE' || feedbackType === 'DISLIKE') {
+          const newHidden = new Set(get().hiddenTrackIds);
+          newHidden.add(targetId);
+          set({ hiddenTrackIds: newHidden });
+        } else if (feedbackType === 'LIKE') {
+          const newLiked = new Set(get().likedTrackIds);
+          newLiked.add(targetId);
+          set({ likedTrackIds: newLiked });
         }
+
+        await fetch('/api/recommendations/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetId, targetType, feedbackType })
+        });
+      } catch (err) {
+        console.warn('[useRecommendationStore] Feedback failed:', err);
       }
-    } catch (err) {
-      console.warn('[useRecommendationStore] Failed to fetch artists catalog:', err);
-    }
-    return [];
-  },
+    },
 
-  sendFeedback: async (targetId, feedbackType, targetType = 'SONG') => {
-    try {
-      if (feedbackType === 'HIDE' || feedbackType === 'DISLIKE') {
-        const newHidden = new Set(get().hiddenTrackIds);
-        newHidden.add(targetId);
-        set({ hiddenTrackIds: newHidden });
-      } else if (feedbackType === 'LIKE') {
-        const newLiked = new Set(get().likedTrackIds);
-        newLiked.add(targetId);
-        set({ likedTrackIds: newLiked });
+    logListeningEvent: async (event) => {
+      try {
+        await fetch('/api/listening-events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...event,
+            clientPlatform: 'WEB'
+          })
+        });
+      } catch {
+        // Non-blocking background log
       }
+    },
 
-      await fetch('/api/recommendations/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId, targetType, feedbackType })
-      });
-    } catch (err) {
-      console.warn('[useRecommendationStore] Feedback failed:', err);
-    }
-  },
-
-  logListeningEvent: async (event) => {
-    try {
-      await fetch('/api/listening-events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...event,
-          clientPlatform: 'WEB'
-        })
-      });
-    } catch {
-      // Non-blocking background log
-    }
-  },
-
-  generateSmartPlaylist: async (req) => {
-    try {
-      const res = await fetch('/api/recommendations/generate-smart-playlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req)
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.playlist) {
-          return json.playlist;
+    generateSmartPlaylist: async (req) => {
+      try {
+        const res = await fetch('/api/recommendations/generate-smart-playlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req)
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.playlist) {
+            return json.playlist;
+          }
         }
+      } catch (err) {
+        console.warn('[useRecommendationStore] Failed to generate smart playlist:', err);
       }
-    } catch (err) {
-      console.warn('[useRecommendationStore] Failed to generate smart playlist:', err);
+      return null;
+    },
+
+    setLanguageFilter: (lang) => {
+      set({ activeLanguageFilter: lang });
+      get().fetchFeed(lang);
+      get().fetchBaseFeed(lang);
+    },
+
+    setOnboardingCompleted: (completed) => {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, completed ? 'true' : 'false');
+      set({ hasCompletedOnboarding: completed, isOnboardingOpen: !completed });
+    },
+
+    openOnboarding: () => {
+      set({ isOnboardingOpen: true });
+    },
+
+    closeOnboarding: () => {
+      set({ isOnboardingOpen: false });
+    },
+
+    resetForLogout: () => {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(FEED_CACHE_STORAGE_KEY);
+          localStorage.removeItem(BASE_FEED_CACHE_STORAGE_KEY);
+          localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+        }
+      } catch {}
+      set({
+        feed: null,
+        baseSections: null,
+        baseCatalogue: [],
+        preferences: null,
+        lastRefreshedAt: null,
+        hasCompletedOnboarding: false,
+        isOnboardingOpen: false,
+        feedError: null,
+        baseError: null,
+        sectionErrors: {},
+        hiddenTrackIds: new Set(),
+        likedTrackIds: new Set(),
+        activeLanguageFilter: 'ALL'
+      });
     }
-    return null;
-  },
-
-  setLanguageFilter: (lang) => {
-    set({ activeLanguageFilter: lang });
-    get().fetchFeed(lang);
-  },
-
-  setOnboardingCompleted: (completed) => {
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, completed ? 'true' : 'false');
-    set({ hasCompletedOnboarding: completed, isOnboardingOpen: !completed });
-  },
-
-  openOnboarding: () => {
-    set({ isOnboardingOpen: true });
-  },
-
-  closeOnboarding: () => {
-    set({ isOnboardingOpen: false });
-  },
-
-  resetForLogout: () => {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(FEED_CACHE_STORAGE_KEY);
-        localStorage.removeItem(ONBOARDING_STORAGE_KEY);
-      }
-    } catch {}
-    set({
-      feed: null,
-      preferences: null,
-      lastRefreshedAt: null,
-      hasCompletedOnboarding: false,
-      isOnboardingOpen: false,
-      hiddenTrackIds: new Set(),
-      likedTrackIds: new Set(),
-      activeLanguageFilter: 'ALL'
-    });
-  }
-}));
+  };
+});

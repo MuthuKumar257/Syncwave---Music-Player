@@ -59,7 +59,7 @@ export const DevicePickerModal: React.FC = () => {
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-4 sm:p-5 space-y-4 max-h-[75vh] overflow-y-auto pb-[max(env(safe-area-inset-bottom,0px),20px)]">
           {!isAuthenticated ? (
             <div className="rounded-control bg-surface-elevated border border-hairline p-4 space-y-3 text-center">
               <p className="text-xs text-text-secondary">

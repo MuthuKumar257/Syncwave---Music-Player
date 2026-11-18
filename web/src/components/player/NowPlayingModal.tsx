@@ -122,137 +122,145 @@ export const NowPlayingModal: React.FC = () => {
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col justify-between p-6 md:p-10 select-none animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 bg-background flex flex-col p-4 sm:p-6 md:p-8 select-none animate-in fade-in duration-150 overflow-y-auto pt-[max(env(safe-area-inset-top,0px),16px)] pb-[max(env(safe-area-inset-bottom,0px),24px)]">
       {copiedToast && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 bg-accent text-black px-4 py-2 rounded-full font-medium text-xs shadow-xl flex items-center gap-2 animate-bounce">
           <Check className="w-4 h-4" /> Share link copied to clipboard!
         </div>
       )}
-      {/* Top Bar */}
-      <div className="flex items-center justify-between relative z-10">
-        <button
-          onClick={() => setNowPlayingOpen(false)}
-          className="p-2 rounded-control bg-surface hover:bg-surface-elevated text-text-muted hover:text-text-primary border border-hairline transition-colors"
-          title="Minimize player"
-        >
-          <ChevronDown className="w-5 h-5" />
-        </button>
 
-        <div className="text-center">
-          <p className="text-[11px] font-mono text-text-muted">
-            {isRemoteMode ? `Remote • ${activeDevice?.deviceName || 'Active Device'}` : 'Now playing'}
-          </p>
-          <p className="text-xs font-medium text-text-primary">
-            {currentSong.album || 'Single'}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <div className="min-h-full flex flex-col justify-between max-w-lg mx-auto w-full gap-4">
+        {/* Top Bar */}
+        <div className="flex items-center justify-between relative z-10">
           <button
-            onClick={() => setDevicePickerOpen(true)}
-            className={`p-2 rounded-control border transition-colors ${
-              isRemoteMode
-                ? 'bg-accent/15 border-accent/40 text-accent'
-                : 'bg-surface border-hairline text-text-muted hover:text-text-primary'
-            }`}
-            title="Connect to a device"
+            onClick={() => setNowPlayingOpen(false)}
+            className="p-2 rounded-control bg-surface hover:bg-surface-elevated text-text-muted hover:text-text-primary border border-hairline transition-colors tap-press"
+            title="Minimize player"
+            aria-label="Minimize player"
           >
-            <MonitorSpeaker className="w-5 h-5" />
+            <ChevronDown className="w-5 h-5" />
           </button>
 
-          <button
-            onClick={() => setQueueOpen(!isQueueOpen)}
-            className={`p-2 rounded-control border transition-colors ${
-              isQueueOpen
-                ? 'bg-surface-elevated border-hairlineLight text-text-primary'
-                : 'bg-surface border-hairline text-text-muted hover:text-text-primary'
-            }`}
-            title="Toggle playback queue (Q)"
-          >
-            <ListMusic className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
+          <div className="text-center px-2 min-w-0 flex-1">
+            <p className="text-[11px] font-mono text-text-muted truncate">
+              {isRemoteMode ? `Remote • ${activeDevice?.deviceName || 'Active Device'}` : 'Now playing'}
+            </p>
+            <p className="text-xs font-medium text-text-primary truncate">
+              {currentSong.album || 'Single'}
+            </p>
+          </div>
 
-      {/* Center Section: Hero Artwork */}
-      <div className="my-auto flex flex-col items-center justify-center max-w-md mx-auto w-full relative z-10 py-4">
-        <div className="w-64 h-64 md:w-80 md:h-80 rounded-card overflow-hidden bg-surface-elevated border border-hairline shadow-subtle relative flex items-center justify-center">
-          <ArtworkImage
-            src={currentSong.artworkUrl}
-            alt={currentSong.title}
-            iconClassName="w-12 h-12 text-text-muted"
-          />
-        </div>
-      </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              onClick={() => setDevicePickerOpen(true)}
+              className={`p-2 rounded-control border transition-colors tap-press ${
+                isRemoteMode
+                  ? 'bg-accent/15 border-accent/40 text-accent'
+                  : 'bg-surface border-hairline text-text-muted hover:text-text-primary'
+              }`}
+              title="Connect to a device"
+              aria-label="Connect to a device"
+            >
+              <MonitorSpeaker className="w-5 h-5" />
+            </button>
 
-      {/* Bottom Track Controls & Sliders */}
-      <div className="max-w-lg mx-auto w-full relative z-10 space-y-4">
-        {/* Title & Artist & Favorite */}
-        <div className="flex items-center justify-between">
-          <div className="min-w-0 flex-1 pr-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-medium text-text-primary truncate tracking-tight">
-                {currentSong.title}
-              </h2>
-              {(isDownloaded(currentSong.id) || currentSong.isLocal || currentSong.source === 'LOCAL' || currentSong.source === 'DOWNLOADED') && (
-                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                  Local Device
-                </span>
+            <button
+              onClick={() => setQueueOpen(!isQueueOpen)}
+              className={`p-2 rounded-control border transition-colors tap-press ${
+                isQueueOpen
+                  ? 'bg-surface-elevated border-hairlineLight text-text-primary'
+                  : 'bg-surface border-hairline text-text-muted hover:text-text-primary'
+              }`}
+              title="Toggle playback queue (Q)"
+              aria-label="Toggle playback queue"
+            >
+              <ListMusic className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Center Section: Hero Artwork */}
+        <div className="my-auto flex flex-col items-center justify-center max-w-md mx-auto w-full relative z-10 py-2 sm:py-4">
+          <div className="w-48 h-48 sm:w-64 sm:h-64 md:w-80 md:h-80 max-h-[38vh] aspect-square rounded-card overflow-hidden bg-surface-elevated border border-hairline shadow-subtle relative flex items-center justify-center">
+            <ArtworkImage
+              src={currentSong.artworkUrl}
+              alt={currentSong.title}
+              iconClassName="w-12 h-12 text-text-muted"
+            />
+          </div>
+        </div>
+
+        {/* Bottom Track Controls & Sliders */}
+        <div className="w-full relative z-10 space-y-3 sm:space-y-4">
+          {/* Title & Artist & Favorite */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1 pr-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h2 className="text-lg sm:text-xl font-medium text-text-primary truncate tracking-tight">
+                  {currentSong.title}
+                </h2>
+                {(isDownloaded(currentSong.id) || currentSong.isLocal || currentSong.source === 'LOCAL' || currentSong.source === 'DOWNLOADED') && (
+                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                    Local Device
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-text-muted truncate mt-0.5">
+                {currentSong.artist} &bull; {currentSong.album}
+              </p>
+              {localError && (
+                <p className="text-[11px] text-amber-400 mt-1 leading-snug">
+                  {localError}
+                </p>
               )}
             </div>
-            <p className="text-xs text-text-muted truncate mt-0.5">
-              {currentSong.artist} &bull; {currentSong.album}
-            </p>
-            {localError && (
-              <p className="text-[11px] text-amber-400 mt-1 leading-snug">
-                {localError}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleDownloadCurrentSong}
-              disabled={isDownloading || isDownloaded(currentSong.id)}
-              className={`p-2 rounded-control border transition-colors ${
-                isDownloaded(currentSong.id)
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
-                  : 'bg-surface hover:bg-surface-elevated border-hairline text-text-muted hover:text-text-primary'
-              }`}
-              title={
-                isDownloaded(currentSong.id)
-                  ? 'Downloaded to local (plays offline)'
-                  : 'Download to local for offline playback'
-              }
-            >
-              {isDownloading ? (
-                <Loader2 className="w-5 h-5 animate-spin text-accent" />
-              ) : isDownloaded(currentSong.id) ? (
-                <Check className="w-5 h-5" />
-              ) : (
-                <Download className="w-5 h-5" />
-              )}
-            </button>
-            <button
-              onClick={() => toggleFavorite(currentSong.id)}
-              className="p-2 rounded-control bg-surface hover:bg-surface-elevated border border-hairline transition-colors"
-              title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-            >
-              <Heart
-                className={`w-5 h-5 ${
-                  isFav ? 'text-accent fill-accent' : 'text-text-muted'
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <button
+                onClick={handleDownloadCurrentSong}
+                disabled={isDownloading || isDownloaded(currentSong.id)}
+                className={`p-2 rounded-control border transition-colors tap-press ${
+                  isDownloaded(currentSong.id)
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
+                    : 'bg-surface hover:bg-surface-elevated border-hairline text-text-muted hover:text-text-primary'
                 }`}
-              />
-            </button>
-            <button
-              onClick={handleDirectShare}
-              className="p-2 rounded-control bg-surface hover:bg-surface-elevated border border-hairline transition-colors"
-              title="Share song"
-            >
-              <Share2 className="w-5 h-5 text-text-muted hover:text-text-primary" />
-            </button>
-            <SongContextMenu song={currentSong} />
+                title={
+                  isDownloaded(currentSong.id)
+                    ? 'Downloaded to local (plays offline)'
+                    : 'Download to local for offline playback'
+                }
+                aria-label="Download song offline"
+              >
+                {isDownloading ? (
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-accent" />
+                ) : isDownloaded(currentSong.id) ? (
+                  <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                ) : (
+                  <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+              </button>
+              <button
+                onClick={() => toggleFavorite(currentSong.id)}
+                className="p-2 rounded-control bg-surface hover:bg-surface-elevated border border-hairline transition-colors tap-press"
+                title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <Heart
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                    isFav ? 'text-accent fill-accent' : 'text-text-muted'
+                  }`}
+                />
+              </button>
+              <button
+                onClick={handleDirectShare}
+                className="p-2 rounded-control bg-surface hover:bg-surface-elevated border border-hairline transition-colors tap-press"
+                title="Share song"
+                aria-label="Share song"
+              >
+                <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-text-muted hover:text-text-primary" />
+              </button>
+              <SongContextMenu song={currentSong} />
+            </div>
           </div>
-        </div>
 
         {/* Scrubber Rail & Time Figures */}
         <div className="space-y-1">
@@ -447,6 +455,7 @@ export const NowPlayingModal: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       <SleepTimerModal
