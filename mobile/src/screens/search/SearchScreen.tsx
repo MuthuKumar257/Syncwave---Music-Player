@@ -17,10 +17,10 @@ import { useSearchStore } from '../../store/useSearchStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { TrackCard } from '../../components/cards/TrackCard';
 import { MovieCard } from '../../components/cards/MovieCard';
-import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useBottomBarOffset } from '../../utils/responsive';
 import { SearchIcon } from '../../components/common/Icon';
 
 export const SearchScreen: React.FC = () => {
@@ -40,6 +40,7 @@ export const SearchScreen: React.FC = () => {
 
   const { playTrack } = usePlayerStore();
   const [filterType, setFilterType] = useState<'ALL' | 'MOVIES' | 'SONGS'>('ALL');
+  const bottomOffset = useBottomBarOffset();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -190,11 +191,14 @@ export const SearchScreen: React.FC = () => {
             </View>
           )}
 
-          <View style={styles.footerSpacing} />
+          <View style={{ height: bottomOffset }} />
         </ScrollView>
       ) : (
         /* Recent Searches and Suggested Starters */
-        <ScrollView contentContainerStyle={styles.recentContent}>
+        <ScrollView
+          contentContainerStyle={styles.recentContent}
+          keyboardShouldPersistTaps="handled"
+        >
           {recentSearches.length > 0 && (
             <View style={styles.recentSection}>
               <Text style={styles.sectionLabel}>Recent Searches</Text>
@@ -230,11 +234,9 @@ export const SearchScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
           </View>
+          <View style={{ height: bottomOffset }} />
         </ScrollView>
       )}
-
-      {/* Persistent Mini Player */}
-      <MiniPlayer onPress={() => navigation.navigate('FullPlayer')} />
     </SafeAreaView>
   );
 };

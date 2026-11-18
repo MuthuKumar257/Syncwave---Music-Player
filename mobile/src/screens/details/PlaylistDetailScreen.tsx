@@ -28,6 +28,8 @@ import { sharePlaylist } from '../../utils/shareUtils';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomBarOffset } from '../../utils/responsive';
 
 type PlaylistDetailRouteProp = RouteProp<RootStackParamList, 'PlaylistDetail'>;
 
@@ -142,6 +144,8 @@ export const PlaylistDetailScreen: React.FC = () => {
   const { playTrack, addTracksToQueue } = usePlayerStore();
   const { localTracks } = useLocalMusicStore();
   const { feed } = useRecommendationStore();
+  const bottomOffset = useBottomBarOffset({ isTabScreen: false });
+  const insets = useSafeAreaInsets();
 
   const playlist = playlists.find((p) => p.id === playlistId);
   const [isLoading, setIsLoading] = useState(!playlist);
@@ -530,7 +534,7 @@ export const PlaylistDetailScreen: React.FC = () => {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(bottomOffset, Spacing.xl) }]} showsVerticalScrollIndicator={false}>
         {/* Playlist Hero Banner */}
         <View style={styles.heroSection}>
           <Image
@@ -956,7 +960,7 @@ export const PlaylistDetailScreen: React.FC = () => {
 
           {/* Bottom Action Bar for Multi-select */}
           {selectedSongIds.length > 0 && (
-            <View style={styles.bottomBar}>
+            <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
               <TouchableOpacity
                 style={styles.addSelectedBtn}
                 onPress={handleAddSelectedSongs}

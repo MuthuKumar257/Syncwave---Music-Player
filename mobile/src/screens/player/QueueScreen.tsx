@@ -288,7 +288,8 @@ const styles = StyleSheet.create({
     width: 48
   },
   content: {
-    padding: Spacing.lg
+    padding: Spacing.lg,
+    paddingBottom: 48
   },
   section: {
     marginBottom: Spacing.lg

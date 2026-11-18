@@ -12,6 +12,7 @@ import { SongDetailScreen } from '../screens/details/SongDetailScreen';
 import { PlaylistDetailScreen } from '../screens/details/PlaylistDetailScreen';
 import { SchedulerScreen } from '../screens/scheduler/SchedulerScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
+import { DownloadsScreen } from '../screens/downloads/DownloadsScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { SignUpScreen } from '../screens/auth/SignUpScreen';
 import { useRecommendationStore } from '../store/useRecommendationStore';
@@ -89,6 +90,7 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
       <Stack.Screen name="Scheduler" component={SchedulerScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Downloads" component={DownloadsScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
     </Stack.Navigator>

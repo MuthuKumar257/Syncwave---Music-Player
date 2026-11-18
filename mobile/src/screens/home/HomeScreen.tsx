@@ -21,6 +21,7 @@ import { TrackCard } from '../../components/cards/TrackCard';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useBottomBarOffset } from '../../utils/responsive';
 
 const AVAILABLE_LANGUAGES = ['ALL', 'Tamil', 'Telugu', 'Hindi', 'Malayalam', 'Kannada', 'English'] as const;
 
@@ -125,20 +126,35 @@ const SectionBlock: React.FC<{
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { feed, isLoadingFeed, fetchFeed } = useRecommendationStore();
+  const {
+    feed,
+    baseSections,
+    baseCatalogue,
+    isLoadingFeed,
+    isLoadingBase,
+    feedError,
+    baseError,
+    selectedLanguages,
+    fetchFeed,
+    fetchBaseFeed
+  } = useRecommendationStore();
   const { playTrack } = usePlayerStore();
   const { isAuthenticated } = useAuthStore();
+  const bottomOffset = useBottomBarOffset();
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedLanguageFilter, setSelectedLanguageFilter] = useState<string>('ALL');
 
   useEffect(() => {
-    fetchFeed(selectedLanguageFilter !== 'ALL' ? selectedLanguageFilter : undefined);
-  }, [fetchFeed, selectedLanguageFilter]);
+    const lang = selectedLanguageFilter !== 'ALL' ? selectedLanguageFilter : undefined;
+    fetchFeed(lang);
+    fetchBaseFeed(lang);
+  }, [fetchFeed, fetchBaseFeed, selectedLanguageFilter]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchFeed(selectedLanguageFilter !== 'ALL' ? selectedLanguageFilter : undefined);
+    const lang = selectedLanguageFilter !== 'ALL' ? selectedLanguageFilter : undefined;
+    await Promise.all([fetchFeed(lang), fetchBaseFeed(lang)]);
     setRefreshing(false);
   };
 
@@ -150,8 +166,13 @@ export const HomeScreen: React.FC = () => {
     );
   };
 
-  // Personalized tracks (authenticated only)
-  const madeForYou = useMemo(() => feed?.madeForYou || feed?.recommendedForYou || [], [feed]);
+  // Personalized tracks (with base catalogue fallback)
+  const madeForYou = useMemo(() => {
+    const rec = feed?.madeForYou || feed?.recommendedForYou || [];
+    if (rec.length > 0) return rec;
+    return baseSections?.recommended || [];
+  }, [feed, baseSections]);
+
   const dailyMixes = useMemo(() => feed?.dailyMixes || [], [feed]);
   const becauseYouListenedTo = useMemo(() => feed?.becauseYouListenedTo?.tracks || feed?.basedOnListeningHistory?.tracks || [], [feed]);
   const basedOnArtist = feed?.becauseYouListenedTo?.basedOn || feed?.basedOnListeningHistory?.basedOn || '';
@@ -161,7 +182,27 @@ export const HomeScreen: React.FC = () => {
   const recentlyPlayed = useMemo(() => feed?.recentlyPlayed || [], [feed]);
   const favouriteSongs = useMemo(() => feed?.favouriteSongs || [], [feed]);
   const similarToFavouriteSongs = useMemo(() => feed?.similarToFavouriteSongs || feed?.similarSongs || [], [feed]);
-  const trending = useMemo(() => filterByLang(feed?.trendingInLanguages || []), [feed, selectedLanguageFilter]);
+
+  const trending = useMemo(() => {
+    const recTrending = feed?.trendingInLanguages || [];
+    if (recTrending.length > 0) return filterByLang(recTrending);
+    return filterByLang(baseSections?.trending || []);
+  }, [feed, baseSections, selectedLanguageFilter]);
+
+  const popularSongs = useMemo(() => {
+    const recPop = feed?.popularSongs || [];
+    if (recPop.length > 0) return filterByLang(recPop);
+    return filterByLang(baseSections?.popularSongs || []);
+  }, [feed, baseSections, selectedLanguageFilter]);
+
+  const recentlyAdded = useMemo(() => {
+    return filterByLang(baseSections?.recentlyAdded || []);
+  }, [baseSections, selectedLanguageFilter]);
+
+  const exploreAllCatalogue = useMemo(() => {
+    return filterByLang(baseSections?.allAvailable || baseCatalogue || []);
+  }, [baseSections, baseCatalogue, selectedLanguageFilter]);
+
   const newReleases = useMemo(() => filterByLang(feed?.newReleases || []), [feed, selectedLanguageFilter]);
   const discoverNew = useMemo(() => filterByLang(feed?.discoverSomethingNew || feed?.discoverNewMusic || []), [feed, selectedLanguageFilter]);
   const continueListening = useMemo(() => feed?.continueListening || [], [feed]);
@@ -172,15 +213,32 @@ export const HomeScreen: React.FC = () => {
 
   // Featured recommendation track
   const featuredTrack = useMemo(() => {
-    return madeForYou[0] || trending[0] || null;
-  }, [madeForYou, trending]);
+    return madeForYou[0] || trending[0] || popularSongs[0] || null;
+  }, [madeForYou, trending, popularSongs]);
 
   // Combined public catalog
   const publicSongs = useMemo(() => {
+    if (exploreAllCatalogue.length > 0) return exploreAllCatalogue;
     const map = new Map<string, Track>();
     [...trending, ...discoverNew, ...similarToFavouriteSongs].forEach((t) => map.set(t.id, t));
     return Array.from(map.values());
-  }, [trending, discoverNew, similarToFavouriteSongs]);
+  }, [exploreAllCatalogue, trending, discoverNew, similarToFavouriteSongs]);
+
+  // Safe development diagnostics
+  useEffect(() => {
+    const safeUserId = isAuthenticated ? 'auth_user' : 'guest_user';
+    console.log(
+      `[HomeRenderDiagnostics:Mobile] User: ${safeUserId}, Filter: ${selectedLanguageFilter}, MadeForYou: ${madeForYou.length}, Trending: ${trending.length}, Popular: ${popularSongs.length}, Recent: ${recentlyAdded.length}, Catalogue: ${exploreAllCatalogue.length}`
+    );
+  }, [
+    isAuthenticated,
+    selectedLanguageFilter,
+    madeForYou.length,
+    trending.length,
+    popularSongs.length,
+    recentlyAdded.length,
+    exploreAllCatalogue.length
+  ]);
 
   const hasAnyContent = isAuthenticated
     ? madeForYou.length > 0 ||
@@ -189,8 +247,11 @@ export const HomeScreen: React.FC = () => {
       basedOnFavouriteArtists.length > 0 ||
       basedOnFavouriteDirectors.length > 0 ||
       trending.length > 0 ||
+      popularSongs.length > 0 ||
+      recentlyAdded.length > 0 ||
       recentlyPlayed.length > 0 ||
       favouriteSongs.length > 0 ||
+      exploreAllCatalogue.length > 0 ||
       discoverNew.length > 0
     : publicSongs.length > 0;
 
@@ -294,22 +355,56 @@ export const HomeScreen: React.FC = () => {
           </View>
         )}
 
-        {isLoadingFeed && !hasAnyContent ? (
+        {/* Error Notice if recommendation API had an issue */}
+        {feedError ? (
+          <View style={styles.errorNoticeContainer}>
+            <View style={styles.errorNoticeCol}>
+              <Text style={styles.errorNoticeTitle}>Could not refresh recommendations</Text>
+              <Text style={styles.errorNoticeSubtitle}>{feedError}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.errorNoticeRetryBtn}
+              onPress={() => fetchFeed(selectedLanguageFilter !== 'ALL' ? selectedLanguageFilter : undefined)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.errorNoticeRetryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* Language Selection Prompt if 0 languages are selected */}
+        {(feed?.requiresLanguageSelection || (isAuthenticated && selectedLanguages.length === 0)) ? (
+          <View style={styles.languagePromptContainer}>
+            <Text style={styles.languagePromptTitle}>Select Your Preferred Languages</Text>
+            <Text style={styles.languagePromptSubtitle}>
+              SyncWave tailors your music recommendations strictly to your chosen languages. Pick languages to unlock personalized daily mixes!
+            </Text>
+            <TouchableOpacity
+              style={styles.languagePromptButton}
+              onPress={() => navigation.navigate('LanguageSelection')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.languagePromptButtonText}>Select Languages</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {(isLoadingFeed || isLoadingBase) && !hasAnyContent ? (
           <View style={styles.stateCard}>
             <ActivityIndicator size="small" color={Colors.accent} />
             <Text style={styles.stateTitle}>
-              {isAuthenticated ? 'Loading personalized feed...' : 'Loading public song catalogue...'}
+              {isAuthenticated ? 'Loading music catalogue & feed...' : 'Loading public song catalogue...'}
             </Text>
           </View>
         ) : !hasAnyContent ? (
           <View style={styles.stateCard}>
             <Text style={styles.stateTitle}>
-              {isAuthenticated ? 'No recommended songs yet' : 'Public catalogue loading...'}
+              {isAuthenticated ? 'No songs available in selected languages' : 'Public catalogue empty'}
             </Text>
             <Text style={styles.stateSubtitle}>
               {isAuthenticated
-                ? 'Pull down or refresh to build recommendations from your taste profile.'
-                : 'Pull down or refresh to load public songs.'}
+                ? 'Try picking more languages or pulling down to refresh songs.'
+                : 'Pull down or tap below to refresh songs.'}
             </Text>
             <TouchableOpacity
               style={styles.emptyActionButton}
@@ -476,6 +571,30 @@ export const HomeScreen: React.FC = () => {
               tracks={songsYouMayLike}
               onPlay={playTrack}
             />
+
+            {/* 14. Popular Songs (Base & Recommendations) */}
+            <SectionBlock
+              title="Popular Songs"
+              subtitle="All-time popular soundtrack releases"
+              tracks={popularSongs}
+              onPlay={playTrack}
+            />
+
+            {/* 15. Recently Added (Independent Base Feed) */}
+            <SectionBlock
+              title="Recently Added"
+              subtitle="Fresh additions to the music catalogue"
+              tracks={recentlyAdded}
+              onPlay={playTrack}
+            />
+
+            {/* 16. Explore Music Catalogue */}
+            <SectionBlock
+              title="Explore Music Catalogue"
+              subtitle="Browse all available catalogue songs"
+              tracks={exploreAllCatalogue}
+              onPlay={playTrack}
+            />
           </View>
         ) : (
           /* =========================================
@@ -501,7 +620,23 @@ export const HomeScreen: React.FC = () => {
               onPlay={playTrack}
             />
 
-            {/* 3. New & Notable Music */}
+            {/* 3. Popular Songs */}
+            <SectionBlock
+              title="Popular Songs"
+              subtitle="Top streaming soundtrack favourites"
+              tracks={popularSongs}
+              onPlay={playTrack}
+            />
+
+            {/* 4. Recently Added */}
+            <SectionBlock
+              title="Recently Added"
+              subtitle="New additions to the music catalogue"
+              tracks={recentlyAdded}
+              onPlay={playTrack}
+            />
+
+            {/* 5. New & Notable Music */}
             <SectionBlock
               title="New & Notable"
               subtitle="Newly added public tracks"
@@ -509,17 +644,25 @@ export const HomeScreen: React.FC = () => {
               onPlay={playTrack}
             />
 
-            {/* 4. Featured Soundtracks */}
+            {/* 6. Featured Soundtracks */}
             <SectionBlock
               title="Featured Soundtracks"
               subtitle="Top film scores and memorable soundtracks"
               tracks={similarSongs}
               onPlay={playTrack}
             />
+
+            {/* 7. Explore All Catalogue Songs */}
+            <SectionBlock
+              title="Explore All Songs"
+              subtitle="Full music catalogue available in SyncWave"
+              tracks={exploreAllCatalogue}
+              onPlay={playTrack}
+            />
           </View>
         )}
 
-        <View style={styles.footerSpacing} />
+        <View style={{ height: bottomOffset }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -849,6 +992,76 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start'
   },
   featuredPlayBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#000000'
+  },
+  errorNoticeContainer: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.card,
+    backgroundColor: Colors.surfaceRaised,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm
+  },
+  errorNoticeCol: {
+    flex: 1
+  },
+  errorNoticeTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.accent
+  },
+  errorNoticeSubtitle: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2
+  },
+  errorNoticeRetryBtn: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: Radius.control
+  },
+  errorNoticeRetryText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.accent
+  },
+  languagePromptContainer: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.card,
+    backgroundColor: Colors.surfaceRaised,
+    borderColor: Colors.accent,
+    borderWidth: 1,
+    gap: Spacing.xs
+  },
+  languagePromptTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary
+  },
+  languagePromptSubtitle: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    lineHeight: 15
+  },
+  languagePromptButton: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.xs,
+    backgroundColor: Colors.accent,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: Radius.control
+  },
+  languagePromptButtonText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#000000'

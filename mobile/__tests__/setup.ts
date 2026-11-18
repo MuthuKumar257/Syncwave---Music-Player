@@ -91,6 +91,12 @@ vi.mock('react-native', () => ({
     getPixelSizeForLayoutSize: vi.fn((size: number) => size * 2),
     roundToNearestPixel: vi.fn((size: number) => Math.round(size))
   },
+  useWindowDimensions: vi.fn(() => ({
+    width: 375,
+    height: 812,
+    scale: 3,
+    fontScale: 1
+  })),
   StyleSheet: {
     create: (styles: any) => styles
   },
@@ -127,6 +133,14 @@ vi.mock('@react-navigation/native', () => ({
     canGoBack: () => true,
     reset: vi.fn()
   })
+}));
+
+// react-native-safe-area-context mock
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: vi.fn(() => ({ top: 44, bottom: 34, left: 0, right: 0 })),
+  SafeAreaProvider: ({ children }: any) => children,
+  SafeAreaView: ({ children }: any) => children,
+  useSafeAreaFrame: vi.fn(() => ({ x: 0, y: 0, width: 375, height: 812 }))
 }));
 
 // API client mock

@@ -17,6 +17,8 @@ import { ArtistCard } from '../../components/cards/ArtistCard';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsiveMetrics } from '../../utils/responsive';
 
 export const MusicPreferencesScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -42,6 +44,8 @@ export const MusicPreferencesScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ALL' | 'DIRECTORS' | 'SINGERS'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewAll, setViewAll] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { isSmallPhone } = useResponsiveMetrics();
 
   useEffect(() => {
     fetchArtists(selectedLanguages);
@@ -105,14 +109,21 @@ export const MusicPreferencesScreen: React.FC = () => {
       </View>
 
       {/* Segmented Filter Pills */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, isSmallPhone && { marginHorizontal: Spacing.sm }]}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'ALL' && styles.activeTabButton]}
           onPress={() => setActiveTab('ALL')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === 'ALL' && styles.activeTabText]}>
-            All Artists
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.tabText,
+              isSmallPhone && { fontSize: 11 },
+              activeTab === 'ALL' && styles.activeTabText
+            ]}
+          >
+            {isSmallPhone ? 'All' : 'All Artists'}
           </Text>
         </TouchableOpacity>
 
@@ -121,8 +132,15 @@ export const MusicPreferencesScreen: React.FC = () => {
           onPress={() => setActiveTab('DIRECTORS')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === 'DIRECTORS' && styles.activeTabText]}>
-            Music Directors ({selectedDirectors.length})
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.tabText,
+              isSmallPhone && { fontSize: 11 },
+              activeTab === 'DIRECTORS' && styles.activeTabText
+            ]}
+          >
+            {isSmallPhone ? `Directors (${selectedDirectors.length})` : `Music Directors (${selectedDirectors.length})`}
           </Text>
         </TouchableOpacity>
 
@@ -131,7 +149,14 @@ export const MusicPreferencesScreen: React.FC = () => {
           onPress={() => setActiveTab('SINGERS')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === 'SINGERS' && styles.activeTabText]}>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.tabText,
+              isSmallPhone && { fontSize: 11 },
+              activeTab === 'SINGERS' && styles.activeTabText
+            ]}
+          >
             Singers ({selectedSingers.length})
           </Text>
         </TouchableOpacity>
@@ -225,18 +250,26 @@ export const MusicPreferencesScreen: React.FC = () => {
       )}
 
       {/* Fixed Bottom Action Bar */}
-      <View style={styles.bottomBar}>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            paddingBottom: Math.max(insets.bottom, Spacing.md),
+            paddingHorizontal: isSmallPhone ? Spacing.sm : Spacing.lg
+          }
+        ]}
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>← Languages</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.continueButton}
+          style={[styles.continueButton, isSmallPhone && { paddingHorizontal: Spacing.md }]}
           onPress={handleFinish}
           activeOpacity={0.85}
         >
-          <Text style={styles.continueText}>
-            Continue to SyncWave ({totalSelectedCount})
+          <Text style={[styles.continueText, isSmallPhone && { fontSize: 13 }]}>
+            {isSmallPhone ? `Continue (${totalSelectedCount})` : `Continue to SyncWave (${totalSelectedCount})`}
           </Text>
         </TouchableOpacity>
       </View>

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Track } from '../api/types';
 import { audioManager } from '../audio/audioManager';
 import { recommendationApi } from '../api/recommendationApi';
+import { useRecommendationStore } from './useRecommendationStore';
 import {
   PendingCommand,
   registerMobilePlaybackSessionBridge,
@@ -12,6 +13,33 @@ import {
   trackToSessionTrack,
   usePlaybackSessionStore,
 } from './usePlaybackSessionStore';
+
+export function normalizeMobileLanguage(lang?: string | null): string {
+  if (!lang || typeof lang !== 'string') return '';
+  const cleaned = lang.trim().toLowerCase();
+  const map: Record<string, string> = {
+    tamil: 'Tamil', ta: 'Tamil', tam: 'Tamil',
+    telugu: 'Telugu', te: 'Telugu', tel: 'Telugu',
+    hindi: 'Hindi', hi: 'Hindi', hin: 'Hindi',
+    malayalam: 'Malayalam', ml: 'Malayalam', mal: 'Malayalam',
+    kannada: 'Kannada', kn: 'Kannada', kan: 'Kannada',
+    punjabi: 'Punjabi', pa: 'Punjabi', pan: 'Punjabi',
+    marathi: 'Marathi', mr: 'Marathi', mar: 'Marathi',
+    bengali: 'Bengali', bn: 'Bengali', ben: 'Bengali',
+    english: 'English', en: 'English', eng: 'English'
+  };
+  return map[cleaned] || (cleaned.charAt(0).toUpperCase() + cleaned.slice(1));
+}
+
+export function isTrackLanguageEligible(track: { language?: string | null }, userLanguages: (string | null | undefined)[]): boolean {
+  if (!userLanguages || userLanguages.length === 0) return false;
+  const normUserLangs = userLanguages.map(normalizeMobileLanguage).filter(Boolean);
+  if (normUserLangs.length === 0) return false;
+
+  const trackLang = normalizeMobileLanguage(track.language);
+  if (!trackLang) return false;
+  return normUserLangs.includes(trackLang);
+}
 
 interface PlayerState {
   currentTrack: Track | null;
@@ -61,6 +89,7 @@ interface PlayerState {
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   clearQueue: () => void;
   clearSessionHistory: () => void;
+  pruneQueueByLanguage: () => void;
   fetchMoreRecommendations: () => Promise<void>;
   setQueueSheetVisible: (visible: boolean) => void;
   setSleepTimerModalVisible: (visible: boolean) => void;
@@ -219,6 +248,18 @@ const fetchAndAppendAutoRecommendations = async (
 
     console.log(`[usePlayerStore Mobile] Recommendation API response received: ${recommendations.length} tracks`);
 
+    const userLangs = useRecommendationStore.getState().selectedLanguages?.length > 0
+      ? useRecommendationStore.getState().selectedLanguages
+      : useRecommendationStore.getState().preferences?.preferredLanguages || [];
+
+    const validRecommendations = recommendations.filter((item: Track) => {
+      if (userLangs.length > 0 && !isTrackLanguageEligible(item, userLangs)) {
+        console.log(`[usePlayerStore Mobile] Dropped recommendation "${item.title}" outside user languages (${item.language})`);
+        return false;
+      }
+      return true;
+    });
+
     const freshQueue = get().queue;
     const freshQueueIds = new Set(freshQueue.map((t) => t.id));
     const currentPlayed = new Set(get().sessionPlayedTrackIds || []);
@@ -227,7 +268,7 @@ const fetchAndAppendAutoRecommendations = async (
     const uniqueNew: Track[] = [];
     let duplicatesFiltered = 0;
 
-    for (const item of recommendations) {
+    for (const item of validRecommendations) {
       if (freshQueueIds.has(item.id) || currentPlayed.has(item.id) || seenCandidateIds.has(item.id)) {
         duplicatesFiltered++;
       } else {
@@ -1026,6 +1067,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     clearSessionHistory: () => {
       const currentId = get().currentTrack?.id;
       set({ sessionPlayedTrackIds: currentId ? [currentId] : [] });
+      persistMobilePlaybackSession(get, true);
+    },
+
+    pruneQueueByLanguage: () => {
+      const userLangs = useRecommendationStore.getState().selectedLanguages?.length > 0
+        ? useRecommendationStore.getState().selectedLanguages
+        : useRecommendationStore.getState().preferences?.preferredLanguages || [];
+      if (userLangs.length === 0) return;
+      const { queue, queueIndex } = get();
+      if (!queue || queue.length === 0) return;
+
+      const current = queue[queueIndex];
+      const validQueue = queue.filter((track, idx) => {
+        if (idx === queueIndex) return true;
+        return isTrackLanguageEligible(track, userLangs);
+      });
+
+      const newIndex = current ? validQueue.findIndex((t) => t.id === current.id) : 0;
+      set({
+        queue: validQueue,
+        queueIndex: Math.max(0, newIndex)
+      });
       persistMobilePlaybackSession(get, true);
     },
 

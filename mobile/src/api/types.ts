@@ -158,6 +158,7 @@ export interface PersonalizedFeed {
   songsYouMayLike?: Track[];
 
   // Backward-compatible fields:
+  popularSongs?: Track[];
   recommendedForYou: Track[];
   basedOnListeningHistory: {
     basedOn: string;

@@ -27,6 +27,19 @@ export interface SongMetadata {
   artworkUrl?: string;
   source: 'LOCAL' | 'DOWNLOADED' | 'SPOTIFY' | 'YOUTUBE';
   externalUrl?: string;
+  language?: string;
+  languages?: string[];
+  composer?: string;
+  movie?: string;
+  movieName?: string;
+  mood?: string;
+  genre?: string;
+  singers?: string[];
+  videoId?: string;
+  fullAudioUrl?: string;
+  previewUrl?: string;
+  isPlayableDirectly?: boolean;
+  releaseYear?: number;
   createdAt: string;
 }
 
@@ -358,6 +371,7 @@ class InMemorySyncStore {
         artworkUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500&auto=format&fit=crop&q=60',
         source: 'LOCAL',
         externalUrl: 'https://syncwave.app',
+        language: 'English',
         createdAt: new Date().toISOString()
       },
       {
@@ -369,6 +383,7 @@ class InMemorySyncStore {
         artworkUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&auto=format&fit=crop&q=60',
         source: 'LOCAL',
         externalUrl: 'https://syncwave.app',
+        language: 'English',
         createdAt: new Date().toISOString()
       },
       {
@@ -379,12 +394,22 @@ class InMemorySyncStore {
         durationMs: 360000,
         artworkUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=60',
         source: 'LOCAL',
+        language: 'English',
         createdAt: new Date().toISOString()
       }
     ];
 
     for (const song of sampleSongs) {
       this.songs.set(song.id, song);
+    }
+  }
+
+  seedCatalogTracks(tracks: SongMetadata[]): void {
+    if (!Array.isArray(tracks)) return;
+    for (const track of tracks) {
+      if (track && track.id) {
+        this.songs.set(track.id, track);
+      }
     }
   }
 

@@ -14,6 +14,8 @@ import { useRecommendationStore } from '../../store/useRecommendationStore';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsiveMetrics } from '../../utils/responsive';
 
 interface LanguageOption {
   code: string;
@@ -37,6 +39,8 @@ const LANGUAGES: LanguageOption[] = [
 export const LanguageSelectionScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { selectedLanguages, toggleLanguage, skipOnboarding } = useRecommendationStore();
+  const insets = useSafeAreaInsets();
+  const { isSmallPhone } = useResponsiveMetrics();
 
   const handleContinue = () => {
     navigation.navigate('MusicPreferences');
@@ -92,17 +96,31 @@ export const LanguageSelectionScreen: React.FC = () => {
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}
-      <View style={styles.bottomBar}>
-        <Text style={styles.selectionCount}>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            paddingBottom: Math.max(insets.bottom, Spacing.md),
+            paddingHorizontal: isSmallPhone ? Spacing.md : Spacing.xl
+          }
+        ]}
+      >
+        <Text style={[styles.selectionCount, { flexShrink: 1, marginRight: 8 }]} numberOfLines={1}>
           {selectedLanguages.length} {selectedLanguages.length === 1 ? 'language' : 'languages'} selected
         </Text>
         <TouchableOpacity
-          style={[styles.continueButton, selectedLanguages.length === 0 && styles.disabledButton]}
+          style={[
+            styles.continueButton,
+            isSmallPhone && { paddingHorizontal: Spacing.md },
+            selectedLanguages.length === 0 && styles.disabledButton
+          ]}
           onPress={handleContinue}
           disabled={selectedLanguages.length === 0}
           activeOpacity={0.8}
         >
-          <Text style={styles.continueButtonText}>Continue to Artists →</Text>
+          <Text style={[styles.continueButtonText, isSmallPhone && { fontSize: 13 }]}>
+            {isSmallPhone ? 'Continue →' : 'Continue to Artists →'}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

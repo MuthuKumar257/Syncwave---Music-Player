@@ -21,10 +21,10 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useDownloadStore } from '../../store/useDownloadStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { TrackCard } from '../../components/cards/TrackCard';
-import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useBottomBarOffset, useResponsiveMetrics } from '../../utils/responsive';
 
 export const LibraryScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -41,6 +41,8 @@ export const LibraryScreen: React.FC = () => {
   const { downloadedTracks, initialize: initDownloads } = useDownloadStore();
   const { playTrack } = usePlayerStore();
   const { isAuthenticated, user } = useAuthStore();
+  const bottomOffset = useBottomBarOffset();
+  const { isSmallPhone } = useResponsiveMetrics();
 
   const [activeTab, setActiveTab] = useState<'LOCAL' | 'PLAYLISTS' | 'FAVORITES' | 'DOWNLOADS'>('LOCAL');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
@@ -104,25 +106,44 @@ export const LibraryScreen: React.FC = () => {
             return (
               <TouchableOpacity
                 key={tab}
-                style={[styles.tabButton, isSelected && styles.activeTabButton]}
+                style={[
+                  styles.tabButton,
+                  isSmallPhone && { paddingHorizontal: 2, paddingVertical: 6 },
+                  isSelected && styles.activeTabButton
+                ]}
                 onPress={() => {
                   setActiveTab(tab);
                   setSelectedPlaylistId(null);
                 }}
               >
-                <Text style={[styles.tabText, isSelected && styles.activeTabText]}>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.tabText,
+                    isSmallPhone && { fontSize: 11 },
+                    isSelected && styles.activeTabText
+                  ]}
+                >
                   {tab === 'LOCAL'
-                    ? `Device (${localTracks.length})`
+                    ? isSmallPhone
+                      ? `Device (${localTracks.length})`
+                      : `Device (${localTracks.length})`
                     : tab === 'PLAYLISTS'
                       ? isAuthenticated
-                        ? `Playlists (${playlists.length})`
+                        ? isSmallPhone
+                          ? `Playlists (${playlists.length})`
+                          : `Playlists (${playlists.length})`
                         : 'Playlists'
                       : tab === 'FAVORITES'
                         ? isAuthenticated
-                          ? `Favorites (${favoriteTracks.length})`
+                          ? isSmallPhone
+                            ? `Favs (${favoriteTracks.length})`
+                            : `Favorites (${favoriteTracks.length})`
                           : 'Favorites'
                         : isAuthenticated
-                          ? `Downloads (${downloadedTracks.length})`
+                          ? isSmallPhone
+                            ? `Offline (${downloadedTracks.length})`
+                            : `Downloads (${downloadedTracks.length})`
                           : 'Downloads'}
                 </Text>
               </TouchableOpacity>
@@ -437,11 +458,8 @@ export const LibraryScreen: React.FC = () => {
           )
         )}
 
-        <View style={styles.footerSpacing} />
+        <View style={{ height: bottomOffset }} />
       </ScrollView>
-
-      {/* Persistent Mini Player */}
-      <MiniPlayer onPress={() => navigation.navigate('FullPlayer')} />
     </SafeAreaView>
   );
 };

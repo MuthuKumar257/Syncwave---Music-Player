@@ -29,8 +29,15 @@ CREATE TABLE IF NOT EXISTS songs (
     artwork_url TEXT,
     source VARCHAR(50) DEFAULT 'LOCAL',
     external_url TEXT,
+    language VARCHAR(50),
+    languages TEXT[] DEFAULT ARRAY[]::TEXT[],
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Backward compatibility columns for existing deployments
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS language VARCHAR(50);
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS languages TEXT[] DEFAULT ARRAY[]::TEXT[];
+CREATE INDEX IF NOT EXISTS idx_songs_language ON songs(language);
 
 -- Playlists
 CREATE TABLE IF NOT EXISTS playlists (
@@ -317,6 +324,16 @@ CREATE INDEX IF NOT EXISTS idx_artist_languages_artist ON artist_languages(artis
 CREATE INDEX IF NOT EXISTS idx_artist_aliases_norm ON artist_aliases(normalized_alias);
 CREATE INDEX IF NOT EXISTS idx_artists_canonical_name ON artists(canonical_name);
 
+-- Song Languages (Many-to-Many normalized mapping: songs can belong to one or more languages)
+CREATE TABLE IF NOT EXISTS song_languages (
+    song_id VARCHAR(100) NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    language_id VARCHAR(50) NOT NULL REFERENCES languages(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (song_id, language_id)
+);
+CREATE INDEX IF NOT EXISTS idx_song_languages_lang ON song_languages(language_id);
+CREATE INDEX IF NOT EXISTS idx_song_languages_song ON song_languages(song_id);
+
 -- =========================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES FOR ALL SENSITIVE TABLES
 -- =========================================================================
@@ -417,6 +434,7 @@ END $$;
 
 -- 10. Public Catalog Tables RLS (Public SELECT, Admin/Service Role Mutation)
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE song_languages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE artists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE artist_languages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE artist_aliases ENABLE ROW LEVEL SECURITY;
@@ -425,6 +443,9 @@ ALTER TABLE languages ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'songs' AND policyname = 'Public read for songs') THEN
         CREATE POLICY "Public read for songs" ON songs FOR SELECT USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'song_languages' AND policyname = 'Public read for song languages') THEN
+        CREATE POLICY "Public read for song languages" ON song_languages FOR SELECT USING (true);
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'artists' AND policyname = 'Public read for artists') THEN
         CREATE POLICY "Public read for artists" ON artists FOR SELECT USING (true);

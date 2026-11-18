@@ -5,6 +5,9 @@ import { KNOWN_INDIAN_MOVIES, COMPOSER_ALIASES, KNOWN_TRACK_VIDEO_MAP } from '..
 import { ARTISTS_CATALOG } from '../services/recommendation/artistCatalog.data';
 import { YouTubeProvider } from '../services/search/youtube.provider';
 import { AppleMusicProvider } from '../services/search/appleMusic.provider';
+import { optionalAuth } from '../middleware/auth';
+import { syncStore } from '../db/store';
+import { normalizeLanguageList, normalizeLanguageToken } from '../utils/languageEligibility';
 import {
   isPreviewOrSampleUrl,
   isSafePublicHttpsUrl,
@@ -139,22 +142,47 @@ router.get('/artists/:id/songs', async (req: Request, res: Response): Promise<vo
 /**
  * GET /api/search/suggestions?q=...
  */
-router.get('/suggestions', (req: Request, res: Response): void => {
+router.get('/suggestions', optionalAuth, (req: Request, res: Response): void => {
   const q = ((req.query.q as string) || '').toLowerCase().trim();
+  const userId = (req as any).user?.id || (req as any).userId;
+  let targetLangs: string[] = [];
+
+  const langQuery = (req.query.language || req.query.languages) as string | undefined;
+  if (langQuery) {
+    targetLangs = normalizeLanguageList(langQuery.split(','));
+  } else if (userId) {
+    const prefs = syncStore.getUserPreferences(userId);
+    targetLangs = normalizeLanguageList(prefs.preferredLanguages);
+  }
+
   if (!q) {
-    // Return trending suggestions
+    // Return trending suggestions strictly filtered by target languages when known
+    const defaultCatalog = [
+      { text: 'Vaaranam Aayiram', type: 'MOVIE', subtitle: 'Harris Jayaraj • Tamil', language: 'Tamil' },
+      { text: 'Nenjukkul Peidhidum', type: 'SONG', subtitle: 'Hariharan • Vaaranam Aayiram', language: 'Tamil' },
+      { text: 'Leo', type: 'MOVIE', subtitle: 'Anirudh Ravichander • Tamil', language: 'Tamil' },
+      { text: 'Naa Ready', type: 'SONG', subtitle: 'Vijay, Anirudh • Leo', language: 'Tamil' },
+      { text: 'Chaleya', type: 'SONG', subtitle: 'Arijit Singh • Jawan', language: 'Hindi' },
+      { text: 'Tum Hi Ho', type: 'SONG', subtitle: 'Arijit Singh • Aashiqui 2', language: 'Hindi' },
+      { text: 'Ala Vaikunthapurramuloo', type: 'MOVIE', subtitle: 'Thaman S • Telugu', language: 'Telugu' },
+      { text: 'ButtaBomma', type: 'SONG', subtitle: 'Armaan Malik • Ala Vaikunthapurramuloo', language: 'Telugu' },
+      { text: 'Kumbalangi Nights', type: 'MOVIE', subtitle: 'Sushin Shyam • Malayalam', language: 'Malayalam' },
+      { text: 'A. R. Rahman', type: 'ARTIST', subtitle: 'Composer & Producer', languages: ['Tamil', 'Hindi', 'Telugu'] }
+    ];
+
+    let filtered = defaultCatalog;
+    if (targetLangs.length > 0) {
+      filtered = defaultCatalog.filter(item => {
+        if (item.language) return targetLangs.includes(normalizeLanguageToken(item.language));
+        if (item.languages) return item.languages.some(l => targetLangs.includes(normalizeLanguageToken(l)));
+        return false;
+      });
+    }
+
     res.json({
       success: true,
       query: '',
-      suggestions: [
-        { text: 'Vaaranam Aayiram', type: 'MOVIE', subtitle: 'Harris Jayaraj • Tamil' },
-        { text: 'Nenjukkul Peidhidum', type: 'SONG', subtitle: 'Hariharan • Vaaranam Aayiram' },
-        { text: 'Leo', type: 'MOVIE', subtitle: 'Anirudh Ravichander • Tamil' },
-        { text: 'Naa Ready', type: 'SONG', subtitle: 'Vijay, Anirudh • Leo' },
-        { text: 'Chaleya', type: 'SONG', subtitle: 'Arijit Singh • Jawan' },
-        { text: 'Ala Vaikunthapurramuloo', type: 'MOVIE', subtitle: 'Thaman S • Telugu' },
-        { text: 'A. R. Rahman', type: 'ARTIST', subtitle: 'Composer & Producer' }
-      ]
+      suggestions: filtered.map(({ language, languages, ...rest }) => rest)
     });
     return;
   }

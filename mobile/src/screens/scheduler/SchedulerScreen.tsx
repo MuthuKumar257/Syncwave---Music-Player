@@ -13,15 +13,16 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSchedulerStore } from '../../store/useSchedulerStore';
-import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useBottomBarOffset } from '../../utils/responsive';
 
 export const SchedulerScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { isAuthenticated, user } = useAuthStore();
   const { schedules, initialize, toggleSchedule } = useSchedulerStore();
+  const bottomOffset = useBottomBarOffset();
 
   useEffect(() => {
     if (isAuthenticated && user?.id) {
@@ -33,12 +34,16 @@ export const SchedulerScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={styles.backButton}>← Back</Text>
-        </TouchableOpacity>
+        {navigation.canGoBack() ? (
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.backButton}>← Back</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 48 }} />
+        )}
         <Text style={styles.headerTitle}>Music Scheduler</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -112,11 +117,8 @@ export const SchedulerScreen: React.FC = () => {
           </View>
         )}
 
-        <View style={styles.footerSpacing} />
+        <View style={{ height: bottomOffset }} />
       </ScrollView>
-
-      {/* Persistent Mini Player */}
-      <MiniPlayer onPress={() => navigation.navigate('FullPlayer')} />
     </SafeAreaView>
   );
 };

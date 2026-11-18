@@ -30,6 +30,7 @@ build/
 # Environment & Local Config
 .env
 .env.local
+.env.example
 .env.*.local
 
 # OS Metadata & Temp Files

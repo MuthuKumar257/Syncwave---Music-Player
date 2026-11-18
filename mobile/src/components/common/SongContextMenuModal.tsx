@@ -7,7 +7,8 @@ import {
   Image,
   Share,
   Alert,
-  StyleSheet
+  StyleSheet,
+  ScrollView
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -265,7 +266,11 @@ export const SongContextMenuModal: React.FC<SongContextMenuModalProps> = ({
             </View>
 
             {/* Menu Options (Standardized & Functional) */}
-            <View style={styles.optionsList}>
+            <ScrollView
+              style={styles.optionsList}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
               {/* 1. Play Now */}
               <TouchableOpacity style={styles.menuRow} onPress={handlePlayNow} activeOpacity={0.7}>
                 <Text style={styles.menuIcon}>▶</Text>
@@ -343,7 +348,7 @@ export const SongContextMenuModal: React.FC<SongContextMenuModalProps> = ({
                           : 'Remove from Library'}
                 </Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -422,6 +427,7 @@ const styles = StyleSheet.create({
   menuCard: {
     width: '92%',
     maxWidth: 400,
+    maxHeight: '84%',
     backgroundColor: '#18181b', // dark charcoal background
     borderRadius: Radius.card,
     borderWidth: 1,

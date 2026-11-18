@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -39,8 +39,12 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   const { currentTrack, isPlaying, playTrack } = usePlayerStore();
   const { isFavorite, toggleFavorite } = useLibraryStore();
   const { isAuthenticated } = useAuthStore();
+  const [imageError, setImageError] = useState(false);
   const isCurrent = currentTrack?.id === track.id;
   const isFav = isFavorite(track.id);
+
+  const fallbackArtwork = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500';
+  const artworkUri = !imageError && track.artworkUrl ? track.artworkUrl : fallbackArtwork;
 
   const handlePress = () => {
     if (onPress) {
@@ -96,8 +100,9 @@ export const TrackCard: React.FC<TrackCardProps> = ({
     );
   };
 
-  const minutes = Math.floor(track.durationMs / 60000);
-  const seconds = Math.floor((track.durationMs % 60000) / 1000);
+  const safeDuration = Number(track.durationMs) || 0;
+  const minutes = Math.floor(safeDuration / 60000);
+  const seconds = Math.floor((safeDuration % 60000) / 1000);
   const durationStr = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 
   if (size === 'row') {
@@ -108,15 +113,16 @@ export const TrackCard: React.FC<TrackCardProps> = ({
         activeOpacity={0.7}
       >
         <Image
-          source={{ uri: track.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500' }}
+          source={{ uri: artworkUri }}
+          onError={() => setImageError(true)}
           style={styles.rowArtwork}
         />
         <View style={styles.rowDetails}>
           <Text style={[styles.rowTitle, isCurrent && styles.accentText]} numberOfLines={1}>
-            {track.title}
+            {track.title || 'Untitled Track'}
           </Text>
           <Text style={styles.rowSubtitle} numberOfLines={1}>
-            {track.artist || 'Unknown Artist'}{track.composer ? ` • Dir: ${track.composer}` : ''}{track.movieName ? ` • ${track.movieName}` : ''}
+            {track.artist || track.composer || 'Unknown Artist'}{track.composer && track.artist !== track.composer ? ` • Dir: ${track.composer}` : ''}{track.movieName ? ` • ${track.movieName}` : ''}
           </Text>
           {track.recommendationReason ? (
             <Text style={styles.reasonText} numberOfLines={1}>
@@ -168,7 +174,8 @@ export const TrackCard: React.FC<TrackCardProps> = ({
     >
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: track.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500' }}
+          source={{ uri: artworkUri }}
+          onError={() => setImageError(true)}
           style={styles.artwork}
         />
         {/* Dedicated Play Button on artwork */}

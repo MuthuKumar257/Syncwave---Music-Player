@@ -9,7 +9,8 @@ import {
   Modal,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  useWindowDimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -53,8 +54,12 @@ export const FullPlayerScreen: React.FC = () => {
     isGeneratingQueue
   } = usePlayerStore();
 
+  const { height: windowHeight } = useWindowDimensions();
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekPos, setSeekPos] = useState(0);
+  const [scrubberWidth, setScrubberWidth] = useState(300);
+  const [imageError, setImageError] = useState(false);
+  const maxArtSize = Math.min(320, Math.max(160, Math.round(windowHeight * 0.32)));
   const { isRemoteMode, devices, activeDeviceId, setDevicePickerVisible } =
     usePlaybackSessionStore();
   const activeDevice = devices.find((d) => d.deviceId === activeDeviceId);
@@ -153,72 +158,87 @@ export const FullPlayerScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Hero Artwork */}
-      <View style={styles.artworkContainer}>
-        <Image
-          source={{ uri: currentTrack.artworkUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800' }}
-          style={styles.heroArtwork}
-        />
-      </View>
-
-      {/* Song Details */}
-      <View style={styles.detailsContainer}>
-        <View style={styles.titleRow}>
-          <View style={styles.titleTextContainer}>
-            <Text style={styles.songTitle} numberOfLines={1}>
-              {currentTrack.title}
-            </Text>
-            <Text style={styles.songArtist} numberOfLines={1}>
-              {currentTrack.composer || currentTrack.artist}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity
-              onPress={handleToggleFavorite}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ marginRight: 8, padding: 6 }}
-              accessibilityLabel={isCurrentFav ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Text style={{ fontSize: 22, color: isCurrentFav ? '#EF4444' : Colors.textSecondary }}>
-                {isCurrentFav ? '♥' : '♡'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => void shareSong(currentTrack)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ marginRight: 8, padding: 6 }}
-              accessibilityLabel="Share Song"
-            >
-              <Text style={{ fontSize: 18, color: Colors.textSecondary }}>↗</Text>
-            </TouchableOpacity>
-            <SongMenuButton track={currentTrack} context="default" />
-          </View>
-        </View>
-
-        {/* Tactile Scrubber Bar */}
-        <View style={styles.scrubberContainer}>
-          <TouchableOpacity
-            style={styles.scrubberTouchArea}
-            activeOpacity={1}
-            onPress={(e) => {
-              const { locationX } = e.nativeEvent;
-              // Assume 300px width approximate scrubber
-              const ratio = Math.max(0, Math.min(1, locationX / 320));
-              const newSec = Math.round(ratio * totalSec);
-              seekTo(newSec);
+      <ScrollView
+        contentContainerStyle={styles.scrollBody}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* Hero Artwork */}
+        <View style={styles.artworkContainer}>
+          <Image
+            source={{
+              uri:
+                !imageError && currentTrack.artworkUrl
+                  ? currentTrack.artworkUrl
+                  : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800'
             }}
-          >
-            <View style={styles.scrubberTrack}>
-              <View style={[styles.scrubberFill, { width: `${progressRatio * 100}%` }]} />
-              <View style={[styles.scrubberThumb, { left: `${progressRatio * 100}%` }]} />
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.timeRow}>
-            <Text style={styles.timeText}>{formatTime(currentSec)}</Text>
-            <Text style={styles.timeText}>{formatTime(totalSec)}</Text>
-          </View>
+            onError={() => setImageError(true)}
+            style={[styles.heroArtwork, { width: maxArtSize, height: maxArtSize }]}
+          />
         </View>
+
+        {/* Song Details */}
+        <View style={styles.detailsContainer}>
+          <View style={styles.titleRow}>
+            <View style={styles.titleTextContainer}>
+              <Text style={styles.songTitle} numberOfLines={1}>
+                {currentTrack.title}
+              </Text>
+              <Text style={styles.songArtist} numberOfLines={1}>
+                {currentTrack.composer || currentTrack.artist}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={handleToggleFavorite}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ marginRight: 8, padding: 6 }}
+                accessibilityLabel={isCurrentFav ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Text style={{ fontSize: 22, color: isCurrentFav ? '#EF4444' : Colors.textSecondary }}>
+                  {isCurrentFav ? '♥' : '♡'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => void shareSong(currentTrack)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ marginRight: 8, padding: 6 }}
+                accessibilityLabel="Share Song"
+              >
+                <Text style={{ fontSize: 18, color: Colors.textSecondary }}>↗</Text>
+              </TouchableOpacity>
+              <SongMenuButton track={currentTrack} context="default" />
+            </View>
+          </View>
+
+          {/* Tactile Scrubber Bar */}
+          <View style={styles.scrubberContainer}>
+            <TouchableOpacity
+              style={styles.scrubberTouchArea}
+              activeOpacity={1}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                if (w > 0) setScrubberWidth(w);
+              }}
+              onPress={(e) => {
+                const { locationX } = e.nativeEvent;
+                const activeWidth = scrubberWidth > 0 ? scrubberWidth : 300;
+                const ratio = Math.max(0, Math.min(1, locationX / activeWidth));
+                const newSec = Math.round(ratio * totalSec);
+                seekTo(newSec);
+              }}
+            >
+              <View style={styles.scrubberTrack}>
+                <View style={[styles.scrubberFill, { width: `${progressRatio * 100}%` }]} />
+                <View style={[styles.scrubberThumb, { left: `${progressRatio * 100}%` }]} />
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.timeRow}>
+              <Text style={styles.timeText}>{formatTime(currentSec)}</Text>
+              <Text style={styles.timeText}>{formatTime(totalSec)}</Text>
+            </View>
+          </View>
 
         {/* Playback Controls Deck */}
         <View style={styles.controlsRow}>
@@ -346,6 +366,7 @@ export const FullPlayerScreen: React.FC = () => {
           )}
         </View>
       </View>
+      </ScrollView>
 
       {/* Interactive Up Next Queue Bottom Sheet */}
       <Modal
@@ -604,6 +625,11 @@ const styles = StyleSheet.create({
   headerQueue: {
     fontSize: 18,
     color: Colors.textSecondary
+  },
+  scrollBody: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    paddingBottom: Spacing.xl
   },
   artworkContainer: {
     alignItems: 'center',

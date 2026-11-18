@@ -1,12 +1,24 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PersonalizedFeed, UserPreferences, ArtistItem } from '../api/types';
+import { PersonalizedFeed, UserPreferences, ArtistItem, Track } from '../api/types';
 import { recommendationApi } from '../api/recommendationApi';
 
 const ONBOARDING_KEY = '@syncwave_onboarding_completed_v1';
 
+export interface MobileBaseHomeSections {
+  recommended: Track[];
+  trending: Track[];
+  recentlyAdded: Track[];
+  popularSongs: Track[];
+  allAvailable: Track[];
+  languages?: string[];
+  requiresLanguageSelection?: boolean;
+}
+
 interface RecommendationState {
   feed: PersonalizedFeed | null;
+  baseSections: MobileBaseHomeSections | null;
+  baseCatalogue: Track[];
   preferences: UserPreferences | null;
   hasCompletedOnboarding: boolean;
   selectedLanguages: string[];
@@ -16,11 +28,15 @@ interface RecommendationState {
   selectedMoods: string[];
   artistsCatalog: ArtistItem[];
   isLoadingFeed: boolean;
+  isLoadingBase: boolean;
   isLoadingArtists: boolean;
+  feedError: string | null;
+  baseError: string | null;
 
   // Actions
   initialize: () => Promise<void>;
   fetchFeed: (languageOverride?: string) => Promise<void>;
+  fetchBaseFeed: (languageOverride?: string) => Promise<void>;
   fetchArtists: (languages?: string[], query?: string) => Promise<void>;
   setSelectedLanguages: (languages: string[]) => void;
   toggleLanguage: (lang: string) => void;
@@ -47,6 +63,8 @@ interface RecommendationState {
 
 export const useRecommendationStore = create<RecommendationState>((set, get) => ({
   feed: null,
+  baseSections: null,
+  baseCatalogue: [],
   preferences: null,
   hasCompletedOnboarding: false,
   selectedLanguages: [],
@@ -56,7 +74,10 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
   selectedMoods: [],
   artistsCatalog: [],
   isLoadingFeed: false,
+  isLoadingBase: false,
   isLoadingArtists: false,
+  feedError: null,
+  baseError: null,
 
   initialize: async () => {
     try {
@@ -72,7 +93,7 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
           selectedGenres: [],
           selectedMoods: []
         });
-        await get().fetchFeed();
+        await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
         return;
       }
 
@@ -97,8 +118,8 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
         }
       } catch {}
 
-      // Fetch initial feed
-      await get().fetchFeed();
+      // Fetch initial feed and base catalogue in parallel
+      await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
     } catch (e) {
       console.warn('[useRecommendationStore] initialize failed:', e);
     }
@@ -110,6 +131,8 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
     } catch {}
     set({
       feed: null,
+      baseSections: null,
+      baseCatalogue: [],
       preferences: null,
       hasCompletedOnboarding: false,
       selectedLanguages: [],
@@ -117,19 +140,47 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
       selectedSingers: [],
       selectedGenres: [],
       selectedMoods: [],
-      isLoadingFeed: false
+      isLoadingFeed: false,
+      isLoadingBase: false,
+      feedError: null,
+      baseError: null
     });
-    await get().fetchFeed();
+    await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
+  },
+
+  fetchBaseFeed: async (languageOverride?: string) => {
+    set({ isLoadingBase: true, baseError: null });
+    try {
+      const base = await recommendationApi.getBaseFeed(languageOverride);
+      set({
+        baseSections: base,
+        baseCatalogue: base.allAvailable || [],
+        isLoadingBase: false,
+        baseError: null
+      });
+    } catch (error: any) {
+      console.warn('[useRecommendationStore] fetchBaseFeed error:', error);
+      set({
+        isLoadingBase: false,
+        baseError: error?.message || 'Failed to load base catalogue'
+      });
+    }
   },
 
   fetchFeed: async (languageOverride?: string) => {
-    set({ isLoadingFeed: true });
+    // Non-blocking trigger of base catalogue feed
+    get().fetchBaseFeed(languageOverride).catch(() => {});
+
+    set({ isLoadingFeed: true, feedError: null });
     try {
       const feed = await recommendationApi.getPersonalizedFeed(languageOverride);
-      set({ feed, isLoadingFeed: false });
-    } catch (error) {
+      set({ feed, isLoadingFeed: false, feedError: null });
+    } catch (error: any) {
       console.warn('[useRecommendationStore] fetchFeed error:', error);
-      set({ isLoadingFeed: false });
+      set({
+        isLoadingFeed: false,
+        feedError: error?.message || 'Failed to load personalized recommendations'
+      });
     }
   },
 
@@ -252,6 +303,7 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
       await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
       set({ hasCompletedOnboarding: true });
       get().fetchFeed();
+      import('./usePlayerStore').then(m => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
     } catch (error) {
       console.warn('[useRecommendationStore] savePreferences error:', error);
     }

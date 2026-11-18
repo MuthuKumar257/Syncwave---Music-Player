@@ -26,6 +26,7 @@ import { shareSong } from '../../utils/shareUtils';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useBottomBarOffset, useResponsiveMetrics } from '../../utils/responsive';
 
 type SongDetailRouteProp = RouteProp<RootStackParamList, 'SongDetail'>;
 
@@ -48,6 +49,9 @@ export const SongDetailScreen: React.FC = () => {
   } = usePlayerStore();
   const { isFavorite, toggleFavorite } = useLibraryStore();
   const { isDownloaded, downloadTrack } = useDownloadStore();
+  const bottomOffset = useBottomBarOffset({ isTabScreen: false });
+  const { isSmallPhone } = useResponsiveMetrics();
+  const artSize = isSmallPhone ? 220 : 280;
 
   const isCurrentSong = currentTrack?.id === track?.id;
   const isFav = track ? isFavorite(track.id) : false;
@@ -214,9 +218,12 @@ export const SongDetailScreen: React.FC = () => {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomOffset + 20 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Large Artwork Showcase */}
-        <View style={styles.artworkWrapper}>
+        <View style={[styles.artworkWrapper, { width: artSize, height: artSize }]}>
           <Image
             source={{
               uri:

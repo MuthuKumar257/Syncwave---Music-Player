@@ -20,9 +20,11 @@ import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useBottomBarOffset } from '../../utils/responsive';
 
 export const DownloadsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const bottomOffset = useBottomBarOffset({ isTabScreen: false });
   const {
     downloadedTracks,
     downloadStatus,
@@ -230,7 +232,7 @@ export const DownloadsScreen: React.FC = () => {
           </View>
         )}
 
-        <View style={styles.footerSpacing} />
+        <View style={{ height: bottomOffset }} />
       </ScrollView>
 
       {/* Persistent Mini Player */}

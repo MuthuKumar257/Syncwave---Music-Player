@@ -16,6 +16,7 @@ import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { useBottomBarOffset, useResponsiveMetrics } from '../../utils/responsive';
 
 type MovieDetailRouteProp = RouteProp<RootStackParamList, 'MovieDetail'>;
 
@@ -24,6 +25,8 @@ export const MovieDetailScreen: React.FC = () => {
   const navigation = useNavigation();
   const { movie } = route.params;
   const { playTrack } = usePlayerStore();
+  const bottomOffset = useBottomBarOffset({ isTabScreen: false });
+  const { isSmallPhone } = useResponsiveMetrics();
 
   const handlePlayAll = () => {
     if (movie.tracks.length > 0) {
@@ -48,7 +51,7 @@ export const MovieDetailScreen: React.FC = () => {
         <View style={styles.heroSection}>
           <Image
             source={{ uri: movie.artworkUrl || 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=600' }}
-            style={styles.artwork}
+            style={[styles.artwork, isSmallPhone && { width: 96, height: 96 }]}
           />
           <View style={styles.heroDetails}>
             <Text style={styles.movieName}>{movie.movieName}</Text>
@@ -78,7 +81,7 @@ export const MovieDetailScreen: React.FC = () => {
           ))}
         </View>
 
-        <View style={styles.footerSpacing} />
+        <View style={{ height: bottomOffset }} />
       </ScrollView>
 
       {/* Persistent Mini Player */}
@@ -108,7 +111,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...Typography.title,
     color: Colors.textPrimary,
-    maxWidth: 220
+    flex: 1,
+    textAlign: 'center'
   },
   headerSpacer: {
     width: 40

@@ -411,11 +411,12 @@ router.get('/users/me/stats', optionalAuth, handleProfileStats);
  * GET /api/recommendations/similar/:songId
  * Content-based similar song discovery
  */
-router.get('/recommendations/similar/:songId', async (req: Request, res: Response): Promise<void> => {
+router.get('/recommendations/similar/:songId', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const songId = req.params.songId;
+    const userId = getUserId(req);
     const limit = parseInt(req.query.limit as string, 10) || 8;
-    const similar = RecommendationEngineService.getSimilarSongs(songId, limit);
+    const similar = RecommendationEngineService.getSimilarSongs(songId, limit, userId);
 
     res.json({
       success: true,

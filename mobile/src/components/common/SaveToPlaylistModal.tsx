@@ -7,7 +7,9 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
-  Alert
+  Alert,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { Track } from '../../api/types';
 import { useLibraryStore } from '../../store/useLibraryStore';
@@ -63,8 +65,12 @@ export const SaveToPlaylistModal: React.FC<SaveToPlaylistModalProps> = ({
     >
       <View style={styles.backdrop}>
         <TouchableOpacity style={styles.dismissArea} activeOpacity={1} onPress={onClose} />
-        <View style={styles.modalCard}>
-          {/* Header */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardContainer}
+        >
+          <View style={styles.modalCard}>
+            {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitles}>
               <Text style={styles.title}>Save to Playlist</Text>
@@ -153,6 +159,7 @@ export const SaveToPlaylistModal: React.FC<SaveToPlaylistModalProps> = ({
             <Text style={styles.doneBtnText}>Done</Text>
           </TouchableOpacity>
         </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -166,13 +173,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.xl
   },
+  keyboardContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   dismissArea: {
     ...StyleSheet.absoluteFillObject
   },
   modalCard: {
     width: '100%',
     maxWidth: 380,
-    maxHeight: 520,
+    maxHeight: '84%',
     backgroundColor: '#18181b',
     borderRadius: Radius.card,
     borderWidth: 1,

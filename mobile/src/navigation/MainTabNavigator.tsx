@@ -83,6 +83,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
                 <IconComp size={18} color={iconColor} strokeWidth={isActive ? 2 : 1.5} />
               </View>
               <Text
+                numberOfLines={1}
                 style={[
                   styles.tabLabel,
                   {

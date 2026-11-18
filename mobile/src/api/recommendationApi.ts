@@ -50,6 +50,68 @@ export const recommendationApi = {
     return res.data.data;
   },
 
+  getBaseFeed: async (languageOverride?: string): Promise<{
+    recommended: Track[];
+    trending: Track[];
+    recentlyAdded: Track[];
+    popularSongs: Track[];
+    allAvailable: Track[];
+    languages?: string[];
+    requiresLanguageSelection?: boolean;
+  }> => {
+    const params = languageOverride && languageOverride !== 'ALL' ? { language: languageOverride } : {};
+    const res = await apiClient.get<{ success: boolean; data: any }>('/api/songs/home-base', { params });
+    const data = res.data?.data || {};
+    const mapTrack = (t: any): Track => ({
+      id: t.id,
+      title: t.title,
+      artist: t.artist || t.composer || 'Unknown Artist',
+      movieName: t.movieName || t.album,
+      album: t.album || t.movieName,
+      composer: t.composer,
+      durationMs: Number(t.durationMs) || 240000,
+      artworkUrl: t.artworkUrl,
+      sourcePlatform: (t.sourcePlatform || (t.videoId ? 'YOUTUBE' : 'LOCAL')) as any,
+      sourceUrl: t.fullAudioUrl || t.sourceUrl || '',
+      language: t.language,
+      isPlayableDirectly: true
+    });
+
+    return {
+      recommended: (data.recommended || []).map(mapTrack),
+      trending: (data.trending || []).map(mapTrack),
+      recentlyAdded: (data.recentlyAdded || []).map(mapTrack),
+      popularSongs: (data.popularSongs || []).map(mapTrack),
+      allAvailable: (data.allAvailable || []).map(mapTrack),
+      languages: data.languages,
+      requiresLanguageSelection: data.requiresLanguageSelection
+    };
+  },
+
+  getSongs: async (options?: { language?: string; limit?: number; offset?: number }): Promise<Track[]> => {
+    const params: Record<string, string> = {};
+    if (options?.language && options.language !== 'ALL') params.language = options.language;
+    if (options?.limit) params.limit = String(options.limit);
+    if (options?.offset) params.offset = String(options.offset);
+
+    const res = await apiClient.get<{ success: boolean; data: any[] }>('/api/songs', { params });
+    const raw = res.data?.data || [];
+    return raw.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      artist: t.artist || t.composer || 'Unknown Artist',
+      movieName: t.movieName || t.album,
+      album: t.album || t.movieName,
+      composer: t.composer,
+      durationMs: Number(t.durationMs) || 240000,
+      artworkUrl: t.artworkUrl,
+      sourcePlatform: (t.sourcePlatform || (t.videoId ? 'YOUTUBE' : 'LOCAL')) as any,
+      sourceUrl: t.fullAudioUrl || t.sourceUrl || '',
+      language: t.language,
+      isPlayableDirectly: true
+    }));
+  },
+
   getUserPreferences: async (): Promise<UserPreferences> => {
     const res = await apiClient.get<{ success: boolean; preferences: UserPreferences }>('/api/users/me/preferences');
     return res.data.preferences;

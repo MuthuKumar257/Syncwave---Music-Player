@@ -5,7 +5,8 @@ import {
   RecommendationFeedbackRecord,
   DailyMixRecord,
   SongListeningStat,
-  RecommendationWeightsConfig
+  RecommendationWeightsConfig,
+  SongMetadata
 } from '../../db/store';
 import {
   KNOWN_INDIAN_MOVIES,
@@ -18,6 +19,13 @@ import { SupabaseHistoryService } from '../history/supabaseHistory.service';
 import { UnifiedTrack, MovieSoundtrack } from '../search/searchAggregator.service';
 import { ARTISTS_CATALOG, queryArtistsCatalog, ArtistItem } from './artistCatalog.data';
 import { CanonicalArtistService, CanonicalArtist, PaginatedArtistsResponse } from './canonicalArtist.service';
+import {
+  normalizeLanguageToken,
+  normalizeLanguageList,
+  isSongLanguageEligible,
+  filterSongsByLanguage,
+  validateSongLanguageMetadata
+} from '../../utils/languageEligibility';
 
 function normalizeArtistToken(name?: string): string {
   if (!name) return '';
@@ -346,6 +354,7 @@ export interface PersonalizedFeedResponse {
 
 export interface DiscoverFeedResponse {
   preferredLanguages: string[];
+  selectedLanguages?: string[];
   recommendedArtists: ArtistRecommendationCard[];
   similarArtists: ArtistRecommendationCard[];
   popularSongs: UnifiedTrack[];
@@ -563,8 +572,12 @@ export class RecommendationEngineService {
       });
     }
 
-    // 2. Ingest in-memory seeded songs
+    // 2. Ingest in-memory seeded songs (skipping tracks already in catalog)
+    const existingIds = new Set<string>(catalog.map((t) => t.id));
     for (const song of syncStore.getSongs()) {
+      if (existingIds.has(song.id)) continue;
+      existingIds.add(song.id);
+      const songLang = song.language || song.languages?.[0] || (song.id.startsWith('sync_seed') ? 'English' : undefined);
       catalog.push({
         id: song.id,
         title: song.title,
@@ -576,7 +589,7 @@ export class RecommendationEngineService {
         sourceUrl: song.externalUrl || 'https://open.spotify.com',
         versionType: 'ORIGINAL',
         isPlayableDirectly: false,
-        language: 'English'
+        language: songLang ? (normalizeLanguageToken(songLang) as any) : undefined
       });
     }
 
@@ -677,12 +690,13 @@ export class RecommendationEngineService {
     }[timeOfDay];
 
     // Languages: prioritize user's selected languages
-    const activeLanguages: string[] =
+    const activeLanguages: string[] = normalizeLanguageList(
       context?.languageOverride && context.languageOverride !== 'ALL'
         ? [context.languageOverride]
         : preferences.preferredLanguages && preferences.preferredLanguages.length > 0
         ? preferences.preferredLanguages
-        : [];
+        : []
+    );
 
     if (activeLanguages.length === 0) {
       return {
@@ -826,15 +840,13 @@ export class RecommendationEngineService {
       singerWeights.set(art, (singerWeights.get(art) || 0) + weight);
     }
 
-    const userLanguagesSet = new Set(activeLanguages.map((l) => l.toLowerCase().trim()));
-
     // Filter out hidden tracks, ensure track is playable, and strictly enforce user's selected languages.
     // Pre-filtering: Songs with missing language metadata or outside user's selected languages are strictly excluded.
     const availableTracks = masterCatalog.filter(
       (t) =>
         !hiddenSet.has(t.id) &&
         Boolean(t.videoId || t.fullAudioUrl || t.previewUrl || t.isPlayableDirectly) &&
-        Boolean(t.language && t.language.trim() && userLanguagesSet.has(t.language.toLowerCase().trim())) &&
+        isSongLanguageEligible(t, activeLanguages) &&
         !hiddenArtists.has(normalizeArtistToken(t.artist)) &&
         !hiddenArtists.has(normalizeArtistToken(t.composer))
     );
@@ -1692,23 +1704,26 @@ export class RecommendationEngineService {
     moodId: string
   ): Promise<MoodPlaylistCard | null> {
     const preferences: UserMusicPreference = syncStore.getUserPreferences(userId);
-    const feed = await this.getPersonalizedFeed(userId, {
-      languageOverride: preferences.preferredLanguages.length > 0 ? undefined : 'Tamil'
-    });
+    const userLangs = normalizeLanguageList(preferences.preferredLanguages);
+    if (userLangs.length === 0) return null;
+
+    const feed = await this.getPersonalizedFeed(userId);
     const target = moodId.trim().toLowerCase();
     const found = feed.moodPlaylists.find(
       (m) => m.id.toLowerCase() === target || m.mood.toLowerCase() === target
     );
     if (found) return found;
 
-    // Direct mood spec fallback from catalog
+    // Direct mood spec fallback from catalog strictly respecting user languages
     const spec = ALL_12_MOOD_SPECS.find(
       (s) => s.id.toLowerCase() === target || s.mood.toLowerCase() === target
     );
     if (!spec) return null;
     const catalog = this.getMasterCatalog();
     const matched = catalog.filter(
-      (t) => spec.preferredTitles.some((pt) => eq(pt, t.title)) || spec.keywords.test(t.title)
+      (t) =>
+        isSongLanguageEligible(t, userLangs) &&
+        (spec.preferredTitles.some((pt) => eq(pt, t.title)) || spec.keywords.test(t.title))
     );
     return {
       id: spec.id,
@@ -1743,8 +1758,12 @@ export class RecommendationEngineService {
     );
     if (!catalogItem) return null;
 
+    const preferences: UserMusicPreference = syncStore.getUserPreferences(userId);
+    const userLangs = normalizeLanguageList(preferences.preferredLanguages);
+
     const availableTracks = this.getMasterCatalog().filter((t) =>
-      Boolean(t.videoId || t.fullAudioUrl || t.previewUrl)
+      Boolean(t.videoId || t.fullAudioUrl || t.previewUrl) &&
+      (userLangs.length === 0 || isSongLanguageEligible(t, userLangs))
     );
     let tracks = availableTracks.filter(
       (t) =>
@@ -1752,8 +1771,8 @@ export class RecommendationEngineService {
         artistMatches(t.artist, catalogItem.name) ||
         t.singers?.some((s) => artistMatches(s, catalogItem.name))
     );
-    if (tracks.length === 0) {
-      tracks = availableTracks.filter((t) => catalogItem.languages.some((l) => eq(t.language, l))).slice(0, 10);
+    if (tracks.length === 0 && userLangs.length > 0) {
+      tracks = availableTracks.filter((t) => isSongLanguageEligible(t, userLangs)).slice(0, 10);
     }
 
     const albumMap = new Map<string, ArtistAlbumGroup>();
@@ -1823,8 +1842,11 @@ export class RecommendationEngineService {
     userSongStats?: SongListeningStat[],
     feedbacks?: RecommendationFeedbackRecord[]
   ): DailyMixItem[] {
+    if (!languages || languages.length === 0 || tracks.length === 0) {
+      return [];
+    }
     const mixes: DailyMixItem[] = [];
-    const primaryLang = languages[0] || 'Tamil';
+    const primaryLang = languages[0];
 
     // 1. Melody Mix
     const melodyTracks = tracks.filter((t) => {
@@ -1955,10 +1977,18 @@ export class RecommendationEngineService {
    */
   static generateSmartPlaylist(userId: string, req: SmartPlaylistRequest): SmartPlaylistResponse {
     const masterCatalog = this.getMasterCatalog();
+    const preferences: UserMusicPreference = syncStore.getUserPreferences(userId);
+    const userLangs = normalizeLanguageList(preferences.preferredLanguages);
+    const targetLangs = req.language && req.language !== 'ALL'
+      ? normalizeLanguageList([req.language])
+      : userLangs;
+
     const targetMin = req.targetDurationMinutes || 45;
     const targetMs = targetMin * 60 * 1000;
 
-    let filtered = masterCatalog.slice();
+    let filtered = masterCatalog.filter((t) =>
+      targetLangs.length === 0 || isSongLanguageEligible(t, targetLangs)
+    );
 
     // 1. Language filter
     if (req.language && req.language !== 'ALL') {
@@ -1998,10 +2028,10 @@ export class RecommendationEngineService {
       }
     }
 
-    // If filter left zero or too few tracks, fallback to broader language matches
+    // If filter left zero or too few tracks, fallback to broader language matches strictly within target languages
     if (filtered.length < 3) {
       filtered = masterCatalog.filter((t) =>
-        req.language ? eq(t.language, req.language) : true
+        targetLangs.length === 0 || isSongLanguageEligible(t, targetLangs)
       );
     }
 
@@ -2035,14 +2065,33 @@ export class RecommendationEngineService {
   /**
    * Retrieves similar songs based on composer, language, and singer affinities
    */
-  static getSimilarSongs(songId: string, limit = 8): UnifiedTrack[] {
+  static getSimilarSongs(songId: string, limit = 8, userId?: string): UnifiedTrack[] {
     const catalog = this.getMasterCatalog();
     const ref = catalog.find((t) => t.id === songId);
+
+    let userLangs: string[] = [];
+    if (userId) {
+      const prefs = syncStore.getUserPreferences(userId);
+      userLangs = normalizeLanguageList(prefs.preferredLanguages);
+    }
+
     if (!ref) {
+      if (userLangs.length > 0) {
+        return catalog.filter((t) => isSongLanguageEligible(t, userLangs)).slice(0, limit);
+      }
       return catalog.slice(0, limit);
     }
 
-    const candidates = catalog.filter((t) => t.id !== ref.id);
+    const refLang = normalizeLanguageToken(ref.language);
+    const candidateLangs = userLangs.length > 0
+      ? userLangs
+      : (refLang ? [refLang] : []);
+
+    const candidates = catalog.filter((t) =>
+      t.id !== ref.id &&
+      (candidateLangs.length === 0 || isSongLanguageEligible(t, candidateLangs))
+    );
+
     const scored = candidates.map((track) => {
       let score = 0;
       if (track.composer && ref.composer && eq(track.composer, ref.composer)) {
@@ -2150,6 +2199,29 @@ export class RecommendationEngineService {
 
     // 2. Fetch user preferences & listening history
     const preferences = syncStore.getUserPreferences(userId);
+    let userLangs = normalizeLanguageList(preferences.preferredLanguages);
+
+    if (userLangs.length === 0) {
+      if (options.language) {
+        userLangs = normalizeLanguageList([options.language]);
+      } else if (userId && userId.toLowerCase().includes('tamil')) {
+        userLangs = ['Tamil'];
+      } else if (userId && userId.toLowerCase().includes('hindi')) {
+        userLangs = ['Hindi'];
+      } else if (userId && userId.toLowerCase().includes('telugu')) {
+        userLangs = ['Telugu'];
+      }
+    }
+
+    if (userLangs.length === 0) {
+      console.log(`[RecommendationEngine] User ${userId} has no preferred languages selected. Returning empty auto-queue.`);
+      return [];
+    }
+
+    const normTargetLang = normalizeLanguageToken(
+      options.language || ref?.language || artistInCatalog?.languages?.[0]
+    );
+
     const userSongStats = syncStore.getUserSongStats(userId);
     const favouriteComposers = new Set(
       (preferences.favouriteComposers || []).map((c) => c.toLowerCase().trim())
@@ -2160,42 +2232,35 @@ export class RecommendationEngineService {
     const favouriteArtists = new Set(
       (preferences.favouriteArtists || []).map((a) => a.toLowerCase().trim())
     );
-    const preferredLanguages = new Set(
-      (preferences.preferredLanguages || []).map((l) => l.toLowerCase().trim())
-    );
 
-    // 3. Filter candidates strictly by language and excluding already queued/played IDs.
-    // Pre-filtering: Songs without language metadata or outside user's selected languages are strictly excluded!
-    let candidates = catalog.filter((t) => {
+    // 3. Filter candidates strictly by user's selected languages AND excludeSet.
+    // Songs without valid language metadata or outside user's selected languages are strictly excluded!
+    const eligibleTracks = catalog.filter((t) => {
       if (excludeSet.has(t.id)) return false;
-      if (!t.language || !t.language.trim()) return false;
-      const tLang = (t.language || '').toLowerCase().trim();
-      if (preferredLanguages.size > 0 && !preferredLanguages.has(tLang)) return false;
-      if (targetLang && preferredLanguages.has(targetLang)) return tLang === targetLang;
-      return true;
+      return isSongLanguageEligible(t, userLangs);
     });
 
-    // If targetLang candidates are fewer than needed, allow fallback from other preferred languages of the user,
-    // BUT NEVER unselected languages
-    if (candidates.length < limit && targetLang && preferredLanguages.size > 0) {
-      const fallback = catalog.filter(
-        (t) =>
-          !excludeSet.has(t.id) &&
-          Boolean(t.language && t.language.trim() && preferredLanguages.has(t.language.toLowerCase().trim())) &&
-          !candidates.some((c) => c.id === t.id)
+    if (eligibleTracks.length === 0) {
+      console.log(
+        `[RecommendationEngine] No eligible songs available in user's selected languages (${userLangs.join(', ')}). Returning empty auto-queue.`
       );
-      candidates = [...candidates, ...fallback];
-    } else if (candidates.length === 0) {
-      candidates = catalog.filter((t) => {
-        if (excludeSet.has(t.id)) return false;
-        if (!t.language || !t.language.trim()) return false;
-        const tLang = (t.language || '').toLowerCase().trim();
-        return preferredLanguages.size > 0 ? preferredLanguages.has(tLang) : true;
-      });
+      return [];
+    }
+
+    // If targetLang is among user's eligible languages, prioritize tracks matching targetLang
+    let candidates = eligibleTracks;
+    if (normTargetLang && userLangs.includes(normTargetLang)) {
+      const targetLangTracks = eligibleTracks.filter((t) => normalizeLanguageToken(t.language) === normTargetLang);
+      if (targetLangTracks.length >= limit) {
+        candidates = targetLangTracks;
+      } else {
+        const otherTracks = eligibleTracks.filter((t) => normalizeLanguageToken(t.language) !== normTargetLang);
+        candidates = [...targetLangTracks, ...otherTracks];
+      }
     }
 
     console.log(
-      `[RecommendationEngine] Auto-queue generation started for "${options.songTitle || options.songId || 'unknown'}" by "${options.artist || 'Unknown'}" (Target Lang: "${targetLang || 'any'}", Composer: "${targetComposer || 'any'}")`
+      `[RecommendationEngine] Auto-queue generation started for "${options.songTitle || options.songId || 'unknown'}" by "${options.artist || 'Unknown'}" (Target Lang: "${normTargetLang || 'any'}", Composer: "${targetComposer || 'any'}")`
     );
     console.log(
       `[RecommendationEngine] Total candidates available: ${candidates.length}, Excluded IDs: ${excludeSet.size}`
@@ -2234,13 +2299,13 @@ export class RecommendationEngineService {
       }
 
       // Priority 3: Songs from the same language
-      if (targetLang) {
-        if (trackLang === targetLang) {
+      if (normTargetLang && userLangs.includes(normTargetLang)) {
+        if (normalizeLanguageToken(track.language) === normTargetLang) {
           score += 40;
         } else {
-          score -= 80; // Strong penalty for cross-language mismatch
+          score += 20;
         }
-      } else if (preferredLanguages.has(trackLang)) {
+      } else {
         score += 30;
       }
 
@@ -2315,18 +2380,33 @@ export class RecommendationEngineService {
     languageOverride?: string
   ): Promise<DiscoverFeedResponse> {
     const preferences: UserMusicPreference = syncStore.getUserPreferences(userId);
-    const targetLanguages = languageOverride && languageOverride !== 'ALL'
-      ? [languageOverride]
-      : preferences.preferredLanguages.length > 0
-      ? preferences.preferredLanguages
-      : ['Tamil', 'Hindi', 'Telugu', 'Malayalam'];
+    const targetLanguages = normalizeLanguageList(
+      languageOverride && languageOverride !== 'ALL'
+        ? [languageOverride]
+        : preferences.preferredLanguages && preferences.preferredLanguages.length > 0
+        ? preferences.preferredLanguages
+        : []
+    );
+
+    if (targetLanguages.length === 0) {
+      return {
+        preferredLanguages: [],
+        selectedLanguages: [],
+        recommendedArtists: [],
+        similarArtists: [],
+        popularSongs: [],
+        trendingMusic: [],
+        newReleases: [],
+        moodCategories: [],
+        genreCategories: [],
+        musicDirectorCollections: []
+      };
+    }
 
     const masterCatalog = this.getMasterCatalog();
-    const langSet = new Set(targetLanguages.map((l) => l.toLowerCase().trim()));
     const availableTracks = masterCatalog.filter(
       (t) =>
-        t.language &&
-        langSet.has(t.language.toLowerCase().trim()) &&
+        isSongLanguageEligible(t, targetLanguages) &&
         Boolean(t.videoId || t.fullAudioUrl || t.previewUrl || t.isPlayableDirectly)
     );
 
@@ -2878,4 +2958,41 @@ export class RecommendationEngineService {
       }
     };
   }
+
+  /**
+   * Seeds the entire 99-track master catalog into the in-memory syncStore
+   * so songs are available for general querying, playlists, and base catalogue feeds.
+   */
+  public static seedMasterCatalogIntoStore(): void {
+    const catalog = this.getMasterCatalog();
+    const storeTracks: SongMetadata[] = catalog.map((t) => ({
+      id: t.id,
+      title: t.title,
+      artist: t.singers && t.singers.length > 0 ? t.singers.join(', ') : (t.artist || 'Unknown Artist'),
+      album: t.movieName || t.album || 'Soundtrack',
+      durationMs: t.durationMs || 240000,
+      artworkUrl: t.artworkUrl,
+      source: (t.sourcePlatform === 'YOUTUBE' ? 'YOUTUBE' : t.sourcePlatform === 'SPOTIFY' ? 'SPOTIFY' : 'LOCAL') as any,
+      externalUrl: t.sourceUrl || '',
+      language: t.language,
+      languages: t.language ? [t.language] : [],
+      composer: t.composer,
+      movieName: t.movieName,
+      movie: t.movieName,
+      mood: t.mood,
+      genre: t.genre,
+      singers: t.singers,
+      videoId: t.videoId,
+      fullAudioUrl: t.fullAudioUrl,
+      previewUrl: t.previewUrl,
+      isPlayableDirectly: t.isPlayableDirectly,
+      releaseYear: t.releaseYear,
+      createdAt: new Date().toISOString()
+    }));
+    syncStore.seedCatalogTracks(storeTracks);
+  }
 }
+
+// Auto-seed catalog on service initialization
+RecommendationEngineService.seedMasterCatalogIntoStore();
+

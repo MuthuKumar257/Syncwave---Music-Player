@@ -11,6 +11,7 @@ export type RootStackParamList = {
   PlaylistDetail: { playlistId: string };
   Scheduler: undefined;
   Settings: undefined;
+  Downloads: undefined;
   Login: undefined;
   SignUp: undefined;
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert
+  Alert,
+  useWindowDimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -41,6 +42,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress, onOpenQueue }) 
     sleepTimerRemainingSec,
     setQueueSheetVisible
   } = usePlayerStore();
+
+  const { width: windowWidth } = useWindowDimensions();
+  const [imageError, setImageError] = useState(false);
+  const isSmallScreen = windowWidth < 360;
+  const isStandardScreen = windowWidth >= 360 && windowWidth < 414;
+  const isLargeScreen = windowWidth >= 414;
 
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { isFavorite, toggleFavorite } = useLibraryStore();
@@ -127,9 +134,11 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress, onOpenQueue }) 
           <Image
             source={{
               uri:
-                currentTrack?.artworkUrl ||
-                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'
+                !imageError && currentTrack?.artworkUrl
+                  ? currentTrack.artworkUrl
+                  : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'
             }}
+            onError={() => setImageError(true)}
             style={styles.thumbnail}
           />
           <View style={styles.textContainer}>
@@ -146,23 +155,25 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress, onOpenQueue }) 
 
         {/* Right: Horizontally Aligned Compact Controls */}
         <View style={styles.buttonsGroup}>
-          {/* Download Button */}
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={handleDownload}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            accessibilityLabel="Download track"
-          >
-            {isDownloading ? (
-              <ActivityIndicator size="small" color={Colors.accent} />
-            ) : isDown ? (
-              <Text style={styles.downloadedIcon}>✓</Text>
-            ) : (
-              <DownloadIcon size={14} color={Colors.textTertiary} strokeWidth={1.5} />
-            )}
-          </TouchableOpacity>
+          {/* Download Button (large screens only) */}
+          {isLargeScreen && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={handleDownload}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel="Download track"
+            >
+              {isDownloading ? (
+                <ActivityIndicator size="small" color={Colors.accent} />
+              ) : isDown ? (
+                <Text style={styles.downloadedIcon}>✓</Text>
+              ) : (
+                <DownloadIcon size={14} color={Colors.textTertiary} strokeWidth={1.5} />
+              )}
+            </TouchableOpacity>
+          )}
 
-          {/* Favourite Button */}
+          {/* Favourite Button (all screens) */}
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={handleToggleFavorite}
@@ -174,17 +185,19 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress, onOpenQueue }) 
             </Text>
           </TouchableOpacity>
 
-          {/* Previous Song */}
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={playPrevious}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            accessibilityLabel="Previous track"
-          >
-            <Text style={styles.iconText}>⏮</Text>
-          </TouchableOpacity>
+          {/* Previous Song (standard & large screens) */}
+          {!isSmallScreen && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={playPrevious}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel="Previous track"
+            >
+              <Text style={styles.iconText}>⏮</Text>
+            </TouchableOpacity>
+          )}
 
-          {/* Play / Pause Button (Prominent) */}
+          {/* Play / Pause Button (Prominent on all screens) */}
           <TouchableOpacity
             style={styles.playPauseBtn}
             onPress={togglePlayPause}
@@ -194,7 +207,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress, onOpenQueue }) 
             <Text style={styles.playPauseIcon}>{isPlaying ? '❚❚' : '▶'}</Text>
           </TouchableOpacity>
 
-          {/* Next Song */}
+          {/* Next Song (all screens) */}
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={playNext}
@@ -204,43 +217,49 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ onPress, onOpenQueue }) 
             <Text style={styles.iconText}>⏭</Text>
           </TouchableOpacity>
 
-          {/* Sleep Timer */}
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => setSleepTimerModalVisible(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            accessibilityLabel="Sleep timer"
-          >
-            <MoonIcon
-              size={14}
-              color={sleepTimerRemainingSec > 0 ? Colors.accent : Colors.textTertiary}
-              strokeWidth={sleepTimerRemainingSec > 0 ? 2 : 1.5}
-            />
-          </TouchableOpacity>
+          {/* Sleep Timer (large screens only) */}
+          {isLargeScreen && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => setSleepTimerModalVisible(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel="Sleep timer"
+            >
+              <MoonIcon
+                size={14}
+                color={sleepTimerRemainingSec > 0 ? Colors.accent : Colors.textTertiary}
+                strokeWidth={sleepTimerRemainingSec > 0 ? 2 : 1.5}
+              />
+            </TouchableOpacity>
+          )}
 
-          {/* Queue Button */}
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={handleOpenQueue}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            accessibilityLabel="Playback queue"
-          >
-            <QueueIcon size={14} color={Colors.textTertiary} strokeWidth={1.5} />
-          </TouchableOpacity>
+          {/* Queue Button (standard & large screens) */}
+          {!isSmallScreen && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={handleOpenQueue}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel="Playback queue"
+            >
+              <QueueIcon size={14} color={Colors.textTertiary} strokeWidth={1.5} />
+            </TouchableOpacity>
+          )}
 
-          {/* Device / Audio Output */}
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => setDevicePickerVisible(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            accessibilityLabel="Audio output devices"
-          >
-            <DeviceIcon
-              size={14}
-              color={isRemoteMode ? Colors.accent : Colors.textTertiary}
-              strokeWidth={isRemoteMode ? 2 : 1.5}
-            />
-          </TouchableOpacity>
+          {/* Device / Audio Output (large screens only) */}
+          {isLargeScreen && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => setDevicePickerVisible(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel="Audio output devices"
+            >
+              <DeviceIcon
+                size={14}
+                color={isRemoteMode ? Colors.accent : Colors.textTertiary}
+                strokeWidth={isRemoteMode ? 2 : 1.5}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -278,8 +297,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: Spacing.xs,
-    maxWidth: 140
+    marginRight: Spacing.xs
   },
   thumbnail: {
     width: 32,

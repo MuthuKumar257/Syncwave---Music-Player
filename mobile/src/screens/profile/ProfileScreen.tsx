@@ -19,11 +19,11 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { recommendationApi } from '../../api/recommendationApi';
 import { ProfileStats, ProfileSongRewatchStat } from '../../api/types';
-import { MiniPlayer } from '../../components/player/MiniPlayer';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
 import { SoundWaveIcon } from '../../components/common/Icon';
+import { useBottomBarOffset, useResponsiveMetrics } from '../../utils/responsive';
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -35,6 +35,8 @@ export const ProfileScreen: React.FC = () => {
   } = useRecommendationStore();
   const { playTrack } = usePlayerStore();
   const { user, isAuthenticated, hydrate, logout, updateProfile } = useAuthStore();
+  const bottomOffset = useBottomBarOffset();
+  const { isSmallPhone } = useResponsiveMetrics();
 
   useEffect(() => {
     void hydrate();
@@ -158,10 +160,8 @@ export const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
+          <View style={{ height: bottomOffset }} />
         </View>
-
-        {/* Persistent Mini Player */}
-        <MiniPlayer onPress={() => navigation.navigate('FullPlayer')} />
       </SafeAreaView>
     );
   }
@@ -208,7 +208,7 @@ export const ProfileScreen: React.FC = () => {
                 <Text style={{ color: Colors.accent, fontSize: 12, fontWeight: '600' }}>Edit</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.userType}>
+            <Text style={styles.userType} numberOfLines={1}>
               {user?.email
                 ? `${user.email} • ${user.authProvider === 'GOOGLE' ? 'Google' : 'Verified'}`
                 : 'Authenticated Account'}
@@ -231,33 +231,59 @@ export const ProfileScreen: React.FC = () => {
         </View>
 
         {/* KPI Stats Summary Row */}
-        <View style={styles.kpiRow}>
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiValue}>{stats?.summary.totalPlays ?? 0}</Text>
-                <Text style={styles.kpiLabel}>Total Plays</Text>
-              </View>
-              <View style={styles.kpiCard}>
-                <Text style={[styles.kpiValue, { color: Colors.accent }]}>
-                  {stats?.summary.totalRewatches ?? 0}
-                </Text>
-                <Text style={styles.kpiLabel}>Rewatches</Text>
-              </View>
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiValue}>
-                  {stats?.summary.uniqueArtistsListened ?? 0}
-                </Text>
-                <Text style={styles.kpiLabel}>Artists</Text>
-              </View>
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiValue}>
-                  {stats?.summary?.formattedListeningTime ||
-                    (typeof stats?.totalListeningHours === 'number' && stats.totalListeningHours > 0
-                      ? `${stats.totalListeningHours}h`
-                      : `${stats?.summary?.totalListeningMinutes ?? 0}m`)}
-                </Text>
-                <Text style={styles.kpiLabel}>Time</Text>
-              </View>
-            </View>
+        <View style={[styles.kpiRow, isSmallPhone && { gap: 4 }]}>
+          <View style={[styles.kpiCard, isSmallPhone && { padding: 6 }]}>
+            <Text
+              style={[styles.kpiValue, isSmallPhone && { fontSize: 16 }]}
+              numberOfLines={1}
+            >
+              {stats?.summary.totalPlays ?? 0}
+            </Text>
+            <Text style={styles.kpiLabel} numberOfLines={1}>
+              {isSmallPhone ? 'Plays' : 'Total Plays'}
+            </Text>
+          </View>
+          <View style={[styles.kpiCard, isSmallPhone && { padding: 6 }]}>
+            <Text
+              style={[
+                styles.kpiValue,
+                { color: Colors.accent },
+                isSmallPhone && { fontSize: 16 }
+              ]}
+              numberOfLines={1}
+            >
+              {stats?.summary.totalRewatches ?? 0}
+            </Text>
+            <Text style={styles.kpiLabel} numberOfLines={1}>
+              Rewatches
+            </Text>
+          </View>
+          <View style={[styles.kpiCard, isSmallPhone && { padding: 6 }]}>
+            <Text
+              style={[styles.kpiValue, isSmallPhone && { fontSize: 16 }]}
+              numberOfLines={1}
+            >
+              {stats?.summary.uniqueArtistsListened ?? 0}
+            </Text>
+            <Text style={styles.kpiLabel} numberOfLines={1}>
+              Artists
+            </Text>
+          </View>
+          <View style={[styles.kpiCard, isSmallPhone && { padding: 6 }]}>
+            <Text
+              style={[styles.kpiValue, isSmallPhone && { fontSize: 16 }]}
+              numberOfLines={1}
+            >
+              {stats?.summary?.formattedListeningTime ||
+                (typeof stats?.totalListeningHours === 'number' && stats.totalListeningHours > 0
+                  ? `${stats.totalListeningHours}h`
+                  : `${stats?.summary?.totalListeningMinutes ?? 0}m`)}
+            </Text>
+            <Text style={styles.kpiLabel} numberOfLines={1}>
+              Time
+            </Text>
+          </View>
+        </View>
 
         {/* 1. Favourite Artist */}
         <View style={styles.card}>
@@ -463,11 +489,8 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.resetButtonText}>Reset Onboarding &amp; Recommendations</Text>
         </TouchableOpacity>
 
-        <View style={styles.footerSpacing} />
+        <View style={{ height: bottomOffset }} />
       </ScrollView>
-
-      {/* Persistent Mini Player */}
-      <MiniPlayer onPress={() => navigation.navigate('FullPlayer')} />
 
       {/* Edit Profile Modal */}
       <Modal
