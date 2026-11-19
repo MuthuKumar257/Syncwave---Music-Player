@@ -38,6 +38,16 @@ apiClient.interceptors.request.use(async (config) => {
     if (userId) {
       config.headers['X-User-Id'] = userId;
     }
+    const prefsJson = await AsyncStorage.getItem('@syncwave_user_preferences_v1');
+    if (prefsJson) {
+      try {
+        const prefs = JSON.parse(prefsJson);
+        const langs = prefs.preferredLanguages || prefs.selectedLanguages;
+        if (Array.isArray(langs) && langs.length > 0) {
+          config.headers['X-User-Languages'] = langs.join(',');
+        }
+      } catch {}
+    }
   } catch {}
   return config;
 });

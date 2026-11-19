@@ -4,6 +4,23 @@ import { PersonalizedFeed, UserPreferences, ArtistItem, Track } from '../api/typ
 import { recommendationApi } from '../api/recommendationApi';
 
 const ONBOARDING_KEY = '@syncwave_onboarding_completed_v1';
+const PREFERENCES_STORAGE_KEY = '@syncwave_user_preferences_v1';
+
+const persistLocalPreferences = async (state: Partial<RecommendationState>) => {
+  try {
+    const dataToStore = {
+      preferredLanguages: state.selectedLanguages || [],
+      favouriteComposers: state.selectedDirectors || [],
+      favouriteSingers: state.selectedSingers || [],
+      favouriteGenres: state.selectedGenres || [],
+      preferredMoods: state.selectedMoods || [],
+      hasCompletedOnboarding: Boolean(state.hasCompletedOnboarding)
+    };
+    await AsyncStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(dataToStore));
+  } catch (e) {
+    console.warn('[useRecommendationStore] persistLocalPreferences error:', e);
+  }
+};
 
 export interface MobileBaseHomeSections {
   recommended: Track[];
@@ -81,20 +98,24 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
 
   initialize: async () => {
     try {
-      const token = await AsyncStorage.getItem('syncwave_auth_token');
-      if (!token) {
-        // Guest mode: do not retain previous user's personalized preferences
-        set({
-          preferences: null,
-          hasCompletedOnboarding: true,
-          selectedLanguages: [],
-          selectedDirectors: [],
-          selectedSingers: [],
-          selectedGenres: [],
-          selectedMoods: []
-        });
-        await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
-        return;
+      // 1. Immediately load cached preferences from AsyncStorage
+      const cachedPrefsJson = await AsyncStorage.getItem(PREFERENCES_STORAGE_KEY);
+      if (cachedPrefsJson) {
+        try {
+          const cached = JSON.parse(cachedPrefsJson);
+          if (cached) {
+            set({
+              selectedLanguages: cached.preferredLanguages || cached.selectedLanguages || [],
+              selectedDirectors: cached.favouriteComposers || cached.selectedDirectors || [],
+              selectedSingers: cached.favouriteSingers || cached.selectedSingers || [],
+              selectedGenres: cached.favouriteGenres || cached.selectedGenres || [],
+              selectedMoods: cached.preferredMoods || cached.selectedMoods || [],
+              hasCompletedOnboarding: Boolean(cached.hasCompletedOnboarding)
+            });
+          }
+        } catch (e) {
+          console.warn('[useRecommendationStore] Failed to parse cached preferences', e);
+        }
       }
 
       const completed = await AsyncStorage.getItem(ONBOARDING_KEY);
@@ -102,21 +123,35 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
         set({ hasCompletedOnboarding: true });
       }
 
+      const token = await AsyncStorage.getItem('syncwave_auth_token');
+      if (!token) {
+        // Guest mode: PRESERVE user's local selected languages and taste profile!
+        await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
+        return;
+      }
+
       // Fetch user preferences from backend
       try {
         const prefs = await recommendationApi.getUserPreferences();
-        if (prefs) {
+        if (prefs && prefs.preferredLanguages && prefs.preferredLanguages.length > 0) {
+          const newLanguages = prefs.preferredLanguages;
           set({
             preferences: prefs,
             hasCompletedOnboarding: Boolean(prefs.hasCompletedOnboarding),
-            selectedLanguages: prefs.preferredLanguages?.length > 0 ? prefs.preferredLanguages : [],
-            selectedDirectors: prefs.favouriteComposers?.length > 0 ? prefs.favouriteComposers : [],
-            selectedSingers: prefs.favouriteSingers?.length > 0 ? prefs.favouriteSingers : [],
-            selectedGenres: prefs.favouriteGenres?.length > 0 ? prefs.favouriteGenres : [],
-            selectedMoods: prefs.preferredMoods?.length > 0 ? prefs.preferredMoods : []
+            selectedLanguages: newLanguages,
+            selectedDirectors: prefs.favouriteComposers?.length > 0 ? prefs.favouriteComposers : get().selectedDirectors,
+            selectedSingers: prefs.favouriteSingers?.length > 0 ? prefs.favouriteSingers : get().selectedSingers,
+            selectedGenres: prefs.favouriteGenres?.length > 0 ? prefs.favouriteGenres : get().selectedGenres,
+            selectedMoods: prefs.preferredMoods?.length > 0 ? prefs.preferredMoods : get().selectedMoods
           });
+          await persistLocalPreferences(get());
+        } else if (get().selectedLanguages.length > 0) {
+          // Push local preferences to backend
+          await get().savePreferences();
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[useRecommendationStore] getUserPreferences error:', err);
+      }
 
       // Fetch initial feed and base catalogue in parallel
       await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
@@ -128,6 +163,7 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
   resetForGuest: async () => {
     try {
       await AsyncStorage.removeItem(ONBOARDING_KEY);
+      await AsyncStorage.removeItem(PREFERENCES_STORAGE_KEY);
     } catch {}
     set({
       feed: null,
@@ -151,7 +187,8 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
   fetchBaseFeed: async (languageOverride?: string) => {
     set({ isLoadingBase: true, baseError: null });
     try {
-      const base = await recommendationApi.getBaseFeed(languageOverride);
+      const activeLanguages = get().selectedLanguages;
+      const base = await recommendationApi.getBaseFeed(languageOverride, activeLanguages);
       set({
         baseSections: base,
         baseCatalogue: base.allAvailable || [],
@@ -168,12 +205,13 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
   },
 
   fetchFeed: async (languageOverride?: string) => {
+    const activeLanguages = get().selectedLanguages;
     // Non-blocking trigger of base catalogue feed
     get().fetchBaseFeed(languageOverride).catch(() => {});
 
     set({ isLoadingFeed: true, feedError: null });
     try {
-      const feed = await recommendationApi.getPersonalizedFeed(languageOverride);
+      const feed = await recommendationApi.getPersonalizedFeed(languageOverride, activeLanguages);
       set({ feed, isLoadingFeed: false, feedError: null });
     } catch (error: any) {
       console.warn('[useRecommendationStore] fetchFeed error:', error);
@@ -198,7 +236,10 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
 
   setSelectedLanguages: (languages: string[]) => {
     set({ selectedLanguages: languages });
+    void persistLocalPreferences({ ...get(), selectedLanguages: languages });
     void get().fetchArtists(languages);
+    void Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
+    import('./usePlayerStore').then((m) => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
   },
 
   toggleLanguage: (lang: string) => {
@@ -214,7 +255,10 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
       next = [...current, lang];
     }
     set({ selectedLanguages: next });
+    void persistLocalPreferences({ ...get(), selectedLanguages: next });
     void get().fetchArtists(next);
+    void Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
+    import('./usePlayerStore').then((m) => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
   },
 
   toggleDirector: (name: string) => {
@@ -291,6 +335,10 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
   savePreferences: async () => {
     const { selectedLanguages, selectedDirectors, selectedSingers, selectedGenres, selectedMoods } = get();
     try {
+      await persistLocalPreferences(get());
+      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+      set({ hasCompletedOnboarding: true });
+
       await recommendationApi.updateUserPreferences({
         preferredLanguages: selectedLanguages,
         favouriteComposers: selectedDirectors,
@@ -300,9 +348,7 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
         preferredMoods: selectedMoods,
         hasCompletedOnboarding: true
       });
-      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-      set({ hasCompletedOnboarding: true });
-      get().fetchFeed();
+      await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
       import('./usePlayerStore').then(m => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
     } catch (error) {
       console.warn('[useRecommendationStore] savePreferences error:', error);
@@ -312,12 +358,15 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
   skipOnboarding: async () => {
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
     set({ hasCompletedOnboarding: true });
-    get().fetchFeed();
+    await persistLocalPreferences(get());
+    await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
+    import('./usePlayerStore').then(m => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
   },
 
   resetPreferences: async () => {
     try {
       await AsyncStorage.removeItem(ONBOARDING_KEY);
+      await AsyncStorage.removeItem(PREFERENCES_STORAGE_KEY);
     } catch {}
     set({
       hasCompletedOnboarding: false,
@@ -329,6 +378,7 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
       preferences: null,
       feed: null
     });
+    await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
   },
 
   markNotInterested: async (songId: string) => {
@@ -401,6 +451,7 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
         hasCompletedOnboarding: false
       });
       await AsyncStorage.removeItem(ONBOARDING_KEY);
+      await AsyncStorage.removeItem(PREFERENCES_STORAGE_KEY);
       set({
         hasCompletedOnboarding: false,
         selectedLanguages: [],
@@ -411,7 +462,7 @@ export const useRecommendationStore = create<RecommendationState>((set, get) => 
         preferences: null,
         feed: null
       });
-      await get().fetchFeed();
+      await Promise.all([get().fetchFeed(), get().fetchBaseFeed()]);
     } catch (e) {
       console.warn('[useRecommendationStore] resetTasteProfile error:', e);
     }

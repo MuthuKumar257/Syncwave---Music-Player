@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
 import { useBottomBarOffset } from '../../utils/responsive';
+import { filterTracksByLanguage } from '../../utils/languageEligibility';
 
 const AVAILABLE_LANGUAGES = ['ALL', 'Tamil', 'Telugu', 'Hindi', 'Malayalam', 'Kannada', 'English'] as const;
 
@@ -158,55 +159,98 @@ export const HomeScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  // Filter helper for public catalogue
-  const filterByLang = (tracks: Track[]) => {
-    if (selectedLanguageFilter === 'ALL') return tracks;
-    return tracks.filter(
-      (t) => (t.language || '').toLowerCase() === selectedLanguageFilter.toLowerCase()
-    );
-  };
+  // Strict language filtering helper:
+  // When selectedLanguageFilter === 'ALL', strictly filters by user's selectedLanguages!
+  // When selectedLanguageFilter !== 'ALL', strictly filters by that language!
+  const filterByLang = useCallback(
+    (tracks: Track[]): Track[] => {
+      return filterTracksByLanguage(tracks, selectedLanguages, selectedLanguageFilter);
+    },
+    [selectedLanguages, selectedLanguageFilter]
+  );
 
   // Personalized tracks (with base catalogue fallback)
   const madeForYou = useMemo(() => {
     const rec = feed?.madeForYou || feed?.recommendedForYou || [];
-    if (rec.length > 0) return rec;
-    return baseSections?.recommended || [];
-  }, [feed, baseSections]);
+    const source = rec.length > 0 ? rec : (baseSections?.recommended || []);
+    return filterByLang(source);
+  }, [feed, baseSections, filterByLang]);
 
-  const dailyMixes = useMemo(() => feed?.dailyMixes || [], [feed]);
-  const becauseYouListenedTo = useMemo(() => feed?.becauseYouListenedTo?.tracks || feed?.basedOnListeningHistory?.tracks || [], [feed]);
+  const dailyMixes = useMemo(() => {
+    const rawMixes = feed?.dailyMixes || [];
+    return rawMixes
+      .map((mix) => ({
+        ...mix,
+        tracks: filterByLang(mix.tracks || [])
+      }))
+      .filter((mix) => (mix.tracks?.length || 0) > 0);
+  }, [feed, filterByLang]);
+
+  const becauseYouListenedTo = useMemo(() => {
+    const tracks = feed?.becauseYouListenedTo?.tracks || feed?.basedOnListeningHistory?.tracks || [];
+    return filterByLang(tracks);
+  }, [feed, filterByLang]);
+
   const basedOnArtist = feed?.becauseYouListenedTo?.basedOn || feed?.basedOnListeningHistory?.basedOn || '';
-  const basedOnFavouriteArtists = useMemo(() => feed?.basedOnFavouriteArtists || feed?.moreFromFavouriteArtists || [], [feed]);
-  const basedOnFavouriteDirectors = useMemo(() => feed?.basedOnFavouriteDirectors || feed?.sameMusicDirector?.tracks || [], [feed]);
+  const basedOnFavouriteArtists = useMemo(() => {
+    const tracks = feed?.basedOnFavouriteArtists || feed?.moreFromFavouriteArtists || [];
+    return filterByLang(tracks);
+  }, [feed, filterByLang]);
+
+  const basedOnFavouriteDirectors = useMemo(() => {
+    const tracks = feed?.basedOnFavouriteDirectors || feed?.sameMusicDirector?.tracks || [];
+    return filterByLang(tracks);
+  }, [feed, filterByLang]);
+
   const directorName = useMemo(() => feed?.sameMusicDirector?.director || 'Top Composer', [feed]);
-  const recentlyPlayed = useMemo(() => feed?.recentlyPlayed || [], [feed]);
-  const favouriteSongs = useMemo(() => feed?.favouriteSongs || [], [feed]);
-  const similarToFavouriteSongs = useMemo(() => feed?.similarToFavouriteSongs || feed?.similarSongs || [], [feed]);
+  const recentlyPlayed = useMemo(() => {
+    return filterByLang(feed?.recentlyPlayed || []);
+  }, [feed, filterByLang]);
+
+  const favouriteSongs = useMemo(() => {
+    return filterByLang(feed?.favouriteSongs || []);
+  }, [feed, filterByLang]);
+
+  const similarToFavouriteSongs = useMemo(() => {
+    const tracks = feed?.similarToFavouriteSongs || feed?.similarSongs || [];
+    return filterByLang(tracks);
+  }, [feed, filterByLang]);
 
   const trending = useMemo(() => {
     const recTrending = feed?.trendingInLanguages || [];
-    if (recTrending.length > 0) return filterByLang(recTrending);
-    return filterByLang(baseSections?.trending || []);
-  }, [feed, baseSections, selectedLanguageFilter]);
+    const source = recTrending.length > 0 ? recTrending : (baseSections?.trending || []);
+    return filterByLang(source);
+  }, [feed, baseSections, filterByLang]);
 
   const popularSongs = useMemo(() => {
     const recPop = feed?.popularSongs || [];
-    if (recPop.length > 0) return filterByLang(recPop);
-    return filterByLang(baseSections?.popularSongs || []);
-  }, [feed, baseSections, selectedLanguageFilter]);
+    const source = recPop.length > 0 ? recPop : (baseSections?.popularSongs || []);
+    return filterByLang(source);
+  }, [feed, baseSections, filterByLang]);
 
   const recentlyAdded = useMemo(() => {
     return filterByLang(baseSections?.recentlyAdded || []);
-  }, [baseSections, selectedLanguageFilter]);
+  }, [baseSections, filterByLang]);
 
   const exploreAllCatalogue = useMemo(() => {
     return filterByLang(baseSections?.allAvailable || baseCatalogue || []);
-  }, [baseSections, baseCatalogue, selectedLanguageFilter]);
+  }, [baseSections, baseCatalogue, filterByLang]);
 
-  const newReleases = useMemo(() => filterByLang(feed?.newReleases || []), [feed, selectedLanguageFilter]);
-  const discoverNew = useMemo(() => filterByLang(feed?.discoverSomethingNew || feed?.discoverNewMusic || []), [feed, selectedLanguageFilter]);
-  const continueListening = useMemo(() => feed?.continueListening || [], [feed]);
-  const songsYouMayLike = useMemo(() => feed?.songsYouMayLike || [], [feed]);
+  const newReleases = useMemo(() => {
+    return filterByLang(feed?.newReleases || []);
+  }, [feed, filterByLang]);
+
+  const discoverNew = useMemo(() => {
+    return filterByLang(feed?.discoverSomethingNew || feed?.discoverNewMusic || []);
+  }, [feed, filterByLang]);
+
+  const continueListening = useMemo(() => {
+    return filterByLang(feed?.continueListening || []);
+  }, [feed, filterByLang]);
+
+  const songsYouMayLike = useMemo(() => {
+    return filterByLang(feed?.songsYouMayLike || []);
+  }, [feed, filterByLang]);
 
   const recommendedTracks = madeForYou;
   const similarSongs = similarToFavouriteSongs;
@@ -332,8 +376,34 @@ export const HomeScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Public Language Selector Bar (always available in Guest mode) */}
-        {!isAuthenticated && (
+        {/* Language Selector Bar */}
+        {selectedLanguages.length > 0 ? (
+          <View style={styles.languageBarContainer}>
+            <Text style={styles.languageBarLabel}>Your Languages:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.languageBarScroll}>
+              {['ALL', ...selectedLanguages].map((lang) => {
+                const isSelected = selectedLanguageFilter === lang;
+                return (
+                  <TouchableOpacity
+                    key={lang}
+                    style={[styles.langPill, isSelected && styles.activeLangPill]}
+                    onPress={() => setSelectedLanguageFilter(lang)}
+                  >
+                    <Text style={[styles.langPillText, isSelected && styles.activeLangPillText]}>
+                      {lang === 'ALL' ? 'All Selected' : lang}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={[styles.langPill, { borderColor: Colors.accent }]}
+                onPress={() => navigation.navigate('LanguageSelection')}
+              >
+                <Text style={[styles.langPillText, { color: Colors.accent }]}>+ Edit</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        ) : !isAuthenticated ? (
           <View style={styles.languageBarContainer}>
             <Text style={styles.languageBarLabel}>Available Languages:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.languageBarScroll}>
@@ -353,7 +423,7 @@ export const HomeScreen: React.FC = () => {
               })}
             </ScrollView>
           </View>
-        )}
+        ) : null}
 
         {/* Error Notice if recommendation API had an issue */}
         {feedError ? (

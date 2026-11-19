@@ -14,6 +14,7 @@ export interface AutoQueueParams {
   artist?: string;
   director?: string;
   language?: string;
+  languages?: string[];
   genre?: string;
   mood?: string;
   excludeIds?: string[];
@@ -47,13 +48,18 @@ export const recommendationApi = {
     }
   },
 
-  getPersonalizedFeed: async (languageOverride?: string): Promise<PersonalizedFeed> => {
-    const params = languageOverride && languageOverride !== 'ALL' ? { language: languageOverride } : {};
+  getPersonalizedFeed: async (languageOverride?: string, languages?: string[]): Promise<PersonalizedFeed> => {
+    const params: Record<string, string> = {};
+    if (languageOverride && languageOverride !== 'ALL') {
+      params.language = languageOverride;
+    } else if (languages && languages.length > 0) {
+      params.languages = languages.join(',');
+    }
     const res = await apiClient.get<{ success: boolean; data: PersonalizedFeed }>('/api/recommendations', { params });
     return res.data.data;
   },
 
-  getBaseFeed: async (languageOverride?: string): Promise<{
+  getBaseFeed: async (languageOverride?: string, languages?: string[]): Promise<{
     recommended: Track[];
     trending: Track[];
     recentlyAdded: Track[];
@@ -62,7 +68,12 @@ export const recommendationApi = {
     languages?: string[];
     requiresLanguageSelection?: boolean;
   }> => {
-    const params = languageOverride && languageOverride !== 'ALL' ? { language: languageOverride } : {};
+    const params: Record<string, string> = {};
+    if (languageOverride && languageOverride !== 'ALL') {
+      params.language = languageOverride;
+    } else if (languages && languages.length > 0) {
+      params.languages = languages.join(',');
+    }
     const res = await apiClient.get<{ success: boolean; data: any }>('/api/songs/home-base', { params });
     const data = res?.data?.data || {};
     const mapTrack = (t: any): Track => ({

@@ -13,33 +13,12 @@ import {
   trackToSessionTrack,
   usePlaybackSessionStore,
 } from './usePlaybackSessionStore';
+import {
+  normalizeMobileLanguage,
+  isTrackLanguageEligible
+} from '../utils/languageEligibility';
 
-export function normalizeMobileLanguage(lang?: string | null): string {
-  if (!lang || typeof lang !== 'string') return '';
-  const cleaned = lang.trim().toLowerCase();
-  const map: Record<string, string> = {
-    tamil: 'Tamil', ta: 'Tamil', tam: 'Tamil',
-    telugu: 'Telugu', te: 'Telugu', tel: 'Telugu',
-    hindi: 'Hindi', hi: 'Hindi', hin: 'Hindi',
-    malayalam: 'Malayalam', ml: 'Malayalam', mal: 'Malayalam',
-    kannada: 'Kannada', kn: 'Kannada', kan: 'Kannada',
-    punjabi: 'Punjabi', pa: 'Punjabi', pan: 'Punjabi',
-    marathi: 'Marathi', mr: 'Marathi', mar: 'Marathi',
-    bengali: 'Bengali', bn: 'Bengali', ben: 'Bengali',
-    english: 'English', en: 'English', eng: 'English'
-  };
-  return map[cleaned] || (cleaned.charAt(0).toUpperCase() + cleaned.slice(1));
-}
-
-export function isTrackLanguageEligible(track: { language?: string | null }, userLanguages: (string | null | undefined)[]): boolean {
-  if (!userLanguages || userLanguages.length === 0) return false;
-  const normUserLangs = userLanguages.map(normalizeMobileLanguage).filter(Boolean);
-  if (normUserLangs.length === 0) return false;
-
-  const trackLang = normalizeMobileLanguage(track.language);
-  if (!trackLang) return false;
-  return normUserLangs.includes(trackLang);
-}
+export { normalizeMobileLanguage, isTrackLanguageEligible };
 
 interface PlayerState {
   currentTrack: Track | null;

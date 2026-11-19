@@ -31,10 +31,17 @@ function getAllMasterSongs(): SongMetadata[] {
     storeSongs = syncStore.getSongs();
   }
 
-  // Deduplicate and ensure all master catalog songs are included
+  // Deduplicate and ensure all master catalog songs are included with valid language metadata
   const songMap = new Map<string, SongMetadata>();
   for (const s of storeSongs) {
-    if (s && s.id) songMap.set(s.id, s);
+    if (s && s.id) {
+      const validLang = s.language || (s as any).languages?.[0] || 'Tamil';
+      songMap.set(s.id, {
+        ...s,
+        language: validLang,
+        languages: [validLang]
+      });
+    }
   }
 
   const masterCatalog = RecommendationEngineService.getMasterCatalog();
@@ -80,12 +87,14 @@ router.get('/', optionalAuth, (req: Request, res: Response): void => {
   const allSongs = getAllMasterSongs();
 
   // Determine language filter
-  const langQuery = (req.query.language as string) || (req.query.languages as string) || '';
+  const langQuery = (req.query.language as string) || (req.query.languages as string) || (req.headers['x-user-languages'] as string) || '';
   let activeLanguages: string[] = [];
 
   if (langQuery && langQuery !== 'ALL') {
     activeLanguages = normalizeLanguageList(langQuery.split(',').map((l) => l.trim()));
-  } else if (!langQuery && userId) {
+  } else if (req.headers['x-user-languages']) {
+    activeLanguages = normalizeLanguageList((req.headers['x-user-languages'] as string).split(',').map((l) => l.trim()));
+  } else if (userId) {
     const prefs = syncStore.getUserPreferences(userId);
     if (prefs.preferredLanguages && prefs.preferredLanguages.length > 0) {
       activeLanguages = normalizeLanguageList(prefs.preferredLanguages);
@@ -167,11 +176,13 @@ const handleHomeBaseFeed = (req: Request, res: Response): void => {
   const allSongs = getAllMasterSongs();
 
   // Language resolution
-  const langQuery = (req.query.language as string) || (req.query.languages as string) || '';
+  const langQuery = (req.query.language as string) || (req.query.languages as string) || (req.headers['x-user-languages'] as string) || '';
   let activeLanguages: string[] = [];
 
   if (langQuery && langQuery !== 'ALL') {
     activeLanguages = normalizeLanguageList(langQuery.split(',').map((l) => l.trim()));
+  } else if (req.headers['x-user-languages']) {
+    activeLanguages = normalizeLanguageList((req.headers['x-user-languages'] as string).split(',').map((l) => l.trim()));
   } else if (userId) {
     const prefs = syncStore.getUserPreferences(userId);
     if (prefs.preferredLanguages && prefs.preferredLanguages.length > 0) {

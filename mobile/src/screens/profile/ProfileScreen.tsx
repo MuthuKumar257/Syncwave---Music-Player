@@ -24,6 +24,7 @@ import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
 import { SoundWaveIcon } from '../../components/common/Icon';
 import { useBottomBarOffset, useResponsiveMetrics } from '../../utils/responsive';
+import { ArtistAvatar } from '../../components/common/ArtistAvatar';
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -296,16 +297,12 @@ export const ProfileScreen: React.FC = () => {
 
           {fallbackFavArtist ? (
             <View style={styles.highlightRow}>
-              {stats?.favouriteArtist?.imageUrl ? (
-                <Image
-                  source={{ uri: stats.favouriteArtist.imageUrl }}
-                  style={styles.artistAvatar}
-                />
-              ) : (
-                <View style={styles.artistAvatarPlaceholder}>
-                  <Text style={styles.avatarLetter}>{fallbackFavArtist[0]}</Text>
-                </View>
-              )}
+              <ArtistAvatar
+                name={fallbackFavArtist}
+                imageUrl={stats?.favouriteArtist?.imageUrl}
+                size={54}
+                showBadge={false}
+              />
               <View style={styles.highlightMeta}>
                 <Text style={styles.highlightBadge}>#1 FAVOURITE ARTIST</Text>
                 <Text style={styles.highlightName}>{fallbackFavArtist}</Text>
@@ -338,16 +335,12 @@ export const ProfileScreen: React.FC = () => {
           {stats?.mostListenedArtist ? (
             <View>
               <View style={styles.highlightRow}>
-                {stats.mostListenedArtist.imageUrl ? (
-                  <Image
-                    source={{ uri: stats.mostListenedArtist.imageUrl }}
-                    style={[styles.artistAvatar, { borderColor: '#34D399' }]}
-                  />
-                ) : (
-                  <View style={[styles.artistAvatarPlaceholder, { borderColor: '#34D399' }]}>
-                    <Text style={styles.avatarLetter}>{stats.mostListenedArtist.name[0]}</Text>
-                  </View>
-                )}
+                <ArtistAvatar
+                  name={stats.mostListenedArtist.name}
+                  imageUrl={stats.mostListenedArtist.imageUrl}
+                  size={54}
+                  showBadge={false}
+                />
                 <View style={styles.highlightMeta}>
                   <Text style={[styles.highlightBadge, { color: '#34D399' }]}>MOST PLAYED ARTIST</Text>
                   <Text style={styles.highlightName}>{stats.mostListenedArtist.name}</Text>

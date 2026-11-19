@@ -39,10 +39,15 @@ router.get('/recommendations', optionalAuth, async (req: Request, res: Response)
     const timeOfDay = req.query.timeOfDay as string | undefined;
     const languageOverride = req.query.language as string | undefined;
     const refreshSeed = (req.query.seed || req.query.refresh) as string | undefined;
+    const langQuery = (req.query.languages as string) || (req.headers['x-user-languages'] as string);
+    const languages = langQuery
+      ? langQuery.split(',').map((l) => l.trim()).filter(Boolean)
+      : undefined;
 
     const feed = await RecommendationEngineService.getPersonalizedFeed(userId, {
       timeOfDay,
       languageOverride,
+      languages,
       refreshSeed
     });
 
@@ -471,12 +476,18 @@ router.post('/recommendations/auto-queue', optionalAuth, async (req: Request, re
       limit
     } = req.body;
 
+    const userLanguagesHeader = req.headers['x-user-languages'] as string | undefined;
+    const languages =
+      (req.body.languages as string[]) ||
+      (userLanguagesHeader ? userLanguagesHeader.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+
     const tracks = await getOrRunAutoQueue(userId, {
       songId,
       songTitle,
       artist,
       director,
       language,
+      languages,
       genre,
       mood,
       excludeIds: Array.isArray(excludeIds) ? excludeIds : undefined,
@@ -515,12 +526,19 @@ router.get('/recommendations/auto-queue', optionalAuth, async (req: Request, res
     const excludeIds = excludeParam ? excludeParam.split(',').map((s) => s.trim()) : undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 15;
 
+    const userLanguagesHeader = req.headers['x-user-languages'] as string | undefined;
+    const langQuery = (req.query.languages as string) || userLanguagesHeader;
+    const languages = langQuery
+      ? langQuery.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
     const tracks = await getOrRunAutoQueue(userId, {
       songId,
       songTitle,
       artist,
       director,
       language,
+      languages,
       genre,
       mood,
       excludeIds,

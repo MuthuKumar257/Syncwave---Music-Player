@@ -626,7 +626,7 @@ export class RecommendationEngineService {
    */
   static async getPersonalizedFeed(
     userId: string,
-    context?: { timeOfDay?: string; languageOverride?: string; refreshSeed?: string }
+    context?: { timeOfDay?: string; languageOverride?: string; languages?: string[]; refreshSeed?: string }
   ): Promise<PersonalizedFeedResponse> {
     const preferences: UserMusicPreference = syncStore.getUserPreferences(userId);
     const listeningEvents = preferences.historyEnabled
@@ -689,14 +689,16 @@ export class RecommendationEngineService {
       }
     }[timeOfDay];
 
-    // Languages: prioritize user's selected languages
-    const activeLanguages: string[] = normalizeLanguageList(
-      context?.languageOverride && context.languageOverride !== 'ALL'
+    // Languages: prioritize explicit languages parameter, languageOverride, or user's stored preferences
+    const rawLanguages =
+      context?.languages && context.languages.length > 0
+        ? context.languages
+        : context?.languageOverride && context.languageOverride !== 'ALL'
         ? [context.languageOverride]
         : preferences.preferredLanguages && preferences.preferredLanguages.length > 0
         ? preferences.preferredLanguages
-        : []
-    );
+        : [];
+    const activeLanguages: string[] = normalizeLanguageList(rawLanguages);
 
     if (activeLanguages.length === 0) {
       return {
@@ -2127,6 +2129,7 @@ export class RecommendationEngineService {
       artist?: string;
       director?: string;
       language?: string;
+      languages?: string[];
       genre?: string;
       mood?: string;
       excludeIds?: string[];
@@ -2199,7 +2202,11 @@ export class RecommendationEngineService {
 
     // 2. Fetch user preferences & listening history
     const preferences = syncStore.getUserPreferences(userId);
-    let userLangs = normalizeLanguageList(preferences.preferredLanguages);
+    let userLangs = normalizeLanguageList(
+      options.languages && options.languages.length > 0
+        ? options.languages
+        : preferences.preferredLanguages
+    );
 
     if (userLangs.length === 0) {
       if (options.language) {

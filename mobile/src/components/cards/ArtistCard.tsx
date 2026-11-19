@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ArtistItem } from '../../api/types';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing, Radius } from '../../theme/spacing';
+import { ArtistAvatar } from '../common/ArtistAvatar';
 
 interface ArtistCardProps {
   artist: ArtistItem;
@@ -19,15 +20,13 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({ artist, isSelected, onPr
       activeOpacity={0.75}
     >
       <View style={styles.imageWrapper}>
-        <Image
-          source={{ uri: artist.imageUrl || 'https://cdn-images.dzcdn.net/images/artist/bd34315ef977a62a9e28c1ab19bb8ac4/500x500-000000-80-0-0.jpg' }}
-          style={styles.avatar}
+        <ArtistAvatar
+          name={artist.name}
+          imageUrl={artist.imageUrl}
+          size={60}
+          isSelected={isSelected}
+          showBadge={true}
         />
-        {isSelected ? (
-          <View style={styles.checkBadge}>
-            <Text style={styles.checkText}>✓</Text>
-          </View>
-        ) : null}
       </View>
 
       <Text style={styles.name} numberOfLines={1}>
