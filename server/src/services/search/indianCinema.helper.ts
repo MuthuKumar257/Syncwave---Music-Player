@@ -498,14 +498,14 @@ export const KNOWN_TRACK_VIDEO_MAP: Record<string, string> = {
 
   // Brahmastra
   'Kesariya': 'BddP6PYo2gs',
-  'Deva Deva': 'mQHkWHPloNE',
-  'Dance Ka Bhoot': '1o32BfSgI7I',
-  'Rasiya': '3hV3Vq5tX2M',
-  'Fitoor': 'FwN5n9-F_j8',
+  'Deva Deva': 'mNuhKUOD_A0',
+  'Dance Ka Bhoot': 'xfMN4SpIxIA',
+  'Rasiya': 'F_oNAi5DcEU',
+  'Fitoor': 'hdNg1TAtAHg',
 
   // Kadal
-  'Adiye': 'gG1H7r0_y5s',
-  'Nenjukkulle': 'e8G805uH7bM',
+  'Adiye': 'X-Ilp8QNNfQ',
+  'Nenjukkulle': 'XYZwp-WAg6I',
 
   // Kumbalangi Nights
   'Cherathukal': 'kAP72G5R4H8',
@@ -572,6 +572,7 @@ export class IndianCinemaHelper {
     if (t.includes('punjabi')) return 'Punjabi';
     if (t.includes('bengali')) return 'Bengali';
     if (t.includes('marathi')) return 'Marathi';
+    if (t.includes('english') || t.includes('global') || t.includes('billboard') || t.includes('hollywood') || t.includes('weeknd') || t.includes('sheeran') || t.includes('swift') || t.includes('coldplay')) return 'English';
 
     // Check movie matches
     for (const m of KNOWN_INDIAN_MOVIES) {

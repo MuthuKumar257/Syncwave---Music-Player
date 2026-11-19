@@ -2208,21 +2208,39 @@ export class RecommendationEngineService {
         : preferences.preferredLanguages
     );
 
+    const isGuest = !userId || userId === 'guest_user';
+
     if (userLangs.length === 0) {
       if (options.language) {
         userLangs = normalizeLanguageList([options.language]);
-      } else if (userId && userId.toLowerCase().includes('tamil')) {
-        userLangs = ['Tamil'];
-      } else if (userId && userId.toLowerCase().includes('hindi')) {
-        userLangs = ['Hindi'];
-      } else if (userId && userId.toLowerCase().includes('telugu')) {
-        userLangs = ['Telugu'];
+      } else if (ref?.language) {
+        userLangs = normalizeLanguageList([ref.language]);
+      } else if (artistInCatalog?.languages && artistInCatalog.languages.length > 0) {
+        userLangs = normalizeLanguageList(artistInCatalog.languages);
+      } else {
+        const combinedQuery = `${options.songTitle || ''} ${options.artist || ''} ${options.genre || ''} ${options.director || ''}`;
+        const detected = IndianCinemaHelper.detectLanguage(combinedQuery);
+        if (detected && detected !== 'Other') {
+          userLangs = [detected];
+        } else if (userId && userId.toLowerCase().includes('tamil')) {
+          userLangs = ['Tamil'];
+        } else if (userId && userId.toLowerCase().includes('hindi')) {
+          userLangs = ['Hindi'];
+        } else if (userId && userId.toLowerCase().includes('telugu')) {
+          userLangs = ['Telugu'];
+        } else if (!isGuest) {
+          // Authenticated registered user with no selected languages -> require onboarding prompt, do not leak cross-language tracks
+          return [];
+        } else {
+          // Safe fallback for unclassified guest playback: supply tracks from available catalog languages so music never stops
+          userLangs = ['English', 'Tamil', 'Hindi', 'Telugu'];
+        }
       }
     }
 
     if (userLangs.length === 0) {
-      console.log(`[RecommendationEngine] User ${userId} has no preferred languages selected. Returning empty auto-queue.`);
-      return [];
+      if (!isGuest) return [];
+      userLangs = ['English', 'Tamil', 'Hindi', 'Telugu'];
     }
 
     const normTargetLang = normalizeLanguageToken(

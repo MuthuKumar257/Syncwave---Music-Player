@@ -70,6 +70,26 @@ interface RecommendationStore {
 const ONBOARDING_STORAGE_KEY = 'syncwave_onboarding_completed_v1';
 const FEED_CACHE_STORAGE_KEY = 'syncwave_home_feed_cache_v1';
 const BASE_FEED_CACHE_STORAGE_KEY = 'syncwave_home_base_cache_v1';
+const PREFERENCES_STORAGE_KEY = 'syncwave_user_preferences_v1';
+
+const loadCachedPreferences = (): UserMusicPreference | null => {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(PREFERENCES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveCachedPreferences = (prefs: UserMusicPreference) => {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    // Ignore storage quota errors
+  }
+};
 
 const loadCachedFeed = (): PersonalizedFeed | null => {
   try {
@@ -124,20 +144,37 @@ let inFlightBaseRequest: Promise<void> | null = null;
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
+  let userLangs = '';
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const p = localStorage.getItem(PREFERENCES_STORAGE_KEY);
+      if (p) {
+        const parsed = JSON.parse(p);
+        if (Array.isArray(parsed.preferredLanguages) && parsed.preferredLanguages.length > 0) {
+          userLangs = parsed.preferredLanguages.join(',');
+        }
+      }
+    }
+  } catch {}
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(userLangs ? { 'X-User-Languages': userLangs } : {})
   };
 };
 
 export const useRecommendationStore = create<RecommendationStore>((set, get) => {
   const initialBase = loadCachedBaseSections();
+  const initialPrefs = loadCachedPreferences();
+  const hasOnboarded =
+    (typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_STORAGE_KEY) === 'true') ||
+    Boolean(initialPrefs?.preferredLanguages && initialPrefs.preferredLanguages.length > 0);
 
   return {
     feed: loadCachedFeed(),
     baseSections: initialBase,
     baseCatalogue: initialBase?.allAvailable || [],
-    preferences: null,
+    preferences: initialPrefs,
     isLoading: false,
     isLoadingBase: false,
     isRefreshing: false,
@@ -145,8 +182,8 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
     baseError: null,
     sectionErrors: {},
     lastRefreshedAt: null,
-    hasCompletedOnboarding: typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_STORAGE_KEY) === 'true',
-    isOnboardingOpen: typeof localStorage === 'undefined' ? false : localStorage.getItem(ONBOARDING_STORAGE_KEY) !== 'true',
+    hasCompletedOnboarding: hasOnboarded,
+    isOnboardingOpen: !hasOnboarded,
     activeLanguageFilter: 'ALL',
     hiddenTrackIds: new Set(),
     likedTrackIds: new Set(),
@@ -298,7 +335,20 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
     fetchPreferences: async () => {
       const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
       if (!token) {
-        set({ preferences: null });
+        const cached = loadCachedPreferences();
+        if (cached) {
+          const hasLangs = Boolean(
+            cached.preferredLanguages && cached.preferredLanguages.length > 0
+          );
+          set({
+            preferences: cached,
+            hasCompletedOnboarding: hasLangs,
+            isOnboardingOpen: !hasLangs,
+            sectionErrors: { ...get().sectionErrors, preferences: '' }
+          });
+        } else {
+          set({ preferences: null });
+        }
         return;
       }
 
@@ -309,6 +359,7 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
         if (res.ok) {
           const json = await res.json();
           if (json.success && json.preferences) {
+            saveCachedPreferences(json.preferences);
             const hasLangs = Boolean(
               json.preferences.preferredLanguages && json.preferences.preferredLanguages.length > 0
             );
@@ -320,12 +371,21 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
             });
           }
         } else {
+          // If server call fails, fallback to local cache if available
+          const cached = loadCachedPreferences();
+          if (cached) {
+            set({ preferences: cached });
+          }
           set({
             sectionErrors: { ...get().sectionErrors, preferences: `HTTP ${res.status}` }
           });
         }
       } catch (err: any) {
         console.warn('[useRecommendationStore] Failed to fetch preferences:', err);
+        const cached = loadCachedPreferences();
+        if (cached) {
+          set({ preferences: cached });
+        }
         set({
           sectionErrors: { ...get().sectionErrors, preferences: err?.message || 'Failed to fetch preferences' }
         });
@@ -333,6 +393,47 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
     },
 
     updatePreferences: async (updates) => {
+      // 1. Merge with existing or default guest preferences
+      const current = get().preferences || {
+        userId: 'guest_user',
+        preferredLanguages: [],
+        favouriteArtists: [],
+        favouriteGenres: [],
+        favouriteComposers: [],
+        favouriteSingers: [],
+        favouriteMovies: [],
+        preferredMoods: [],
+        personalizationEnabled: true,
+        historyEnabled: true,
+        updatedAt: new Date().toISOString()
+      };
+
+      const merged: UserMusicPreference = {
+        ...current,
+        ...updates,
+        preferredLanguages: updates.preferredLanguages ?? current.preferredLanguages,
+        favouriteArtists: updates.favouriteArtists ?? current.favouriteArtists,
+        favouriteGenres: updates.favouriteGenres ?? current.favouriteGenres,
+        favouriteComposers: updates.favouriteComposers ?? current.favouriteComposers,
+        favouriteSingers: updates.favouriteSingers ?? current.favouriteSingers,
+        preferredMoods: updates.preferredMoods ?? current.preferredMoods,
+        updatedAt: new Date().toISOString()
+      };
+
+      saveCachedPreferences(merged);
+      const hasLangs = Boolean(merged.preferredLanguages && merged.preferredLanguages.length > 0);
+      set({
+        preferences: merged,
+        hasCompletedOnboarding: hasLangs,
+        isOnboardingOpen: !hasLangs
+      });
+
+      // Refresh personalized feed and base catalogue with updated preferences
+      get().fetchFeed();
+      get().fetchBaseFeed();
+      useAnalyticsStore.getState().fetchStats(true).catch(() => {});
+      import('./usePlayerStore').then(m => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
+
       const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
       if (!token) return;
 
@@ -345,22 +446,30 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
         if (res.ok) {
           const json = await res.json();
           if (json.success && json.preferences) {
+            saveCachedPreferences(json.preferences);
             set({ preferences: json.preferences });
-            // Refresh personalized feed and base catalogue with updated preferences
-            get().fetchFeed();
-            get().fetchBaseFeed();
-            // Immediately update analytics dashboard
-            useAnalyticsStore.getState().fetchStats(true).catch(() => {});
-            // Immediately purge old language recommendations from playback queue
-            import('./usePlayerStore').then(m => m.usePlayerStore.getState().pruneQueueByLanguage?.()).catch(() => {});
           }
         }
       } catch (err) {
-        console.warn('[useRecommendationStore] Failed to update preferences:', err);
+        console.warn('[useRecommendationStore] Failed to update preferences on server:', err);
       }
     },
 
     resetPreferences: async () => {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(PREFERENCES_STORAGE_KEY);
+        }
+      } catch {}
+      set({
+        preferences: null,
+        hiddenTrackIds: new Set(),
+        likedTrackIds: new Set()
+      });
+      get().fetchFeed();
+      get().fetchBaseFeed();
+      useAnalyticsStore.getState().fetchStats(true).catch(() => {});
+
       const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
       if (!token) return;
 
@@ -507,6 +616,7 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
           localStorage.removeItem(FEED_CACHE_STORAGE_KEY);
           localStorage.removeItem(BASE_FEED_CACHE_STORAGE_KEY);
           localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+          localStorage.removeItem(PREFERENCES_STORAGE_KEY);
         }
       } catch {}
       set({

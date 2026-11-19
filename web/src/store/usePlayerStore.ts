@@ -344,12 +344,13 @@ const fetchAndAppendAutoRecommendations = async (
       }
     }
 
-    // 2. Fetch from backend auto-queue endpoint with Authorization token
+    // 2. Fetch from backend auto-queue endpoint with Authorization token & user languages
     try {
       const token = typeof localStorage !== 'undefined' ? localStorage.getItem('syncwave_token') : null;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(userPreferredLangs.length > 0 ? { 'X-User-Languages': userPreferredLangs.join(',') } : {})
       };
       const res = await fetch('/api/recommendations/auto-queue', {
         method: 'POST',
@@ -362,6 +363,7 @@ const fetchAndAppendAutoRecommendations = async (
           language: referenceSong.language,
           genre: referenceSong.genre,
           mood: referenceSong.mood,
+          languages: userPreferredLangs,
           excludeIds,
           limit: 20,
         }),
@@ -424,6 +426,78 @@ const fetchAndAppendAutoRecommendations = async (
       } else {
         seenCandidateIds.add(cand.id);
         uniqueNewSongs.push(cand);
+      }
+    }
+
+    // Fallback: If recommendation API returned insufficient tracks (< 5), replenish from shuffled catalogue
+    if (uniqueNewSongs.length < 5) {
+      try {
+        const recStore = useRecommendationStore.getState();
+        let baseCat = recStore.baseCatalogue || [];
+        const baseSections = recStore.baseSections;
+
+        if (baseCat.length === 0 && !baseSections) {
+          await recStore.fetchBaseFeed();
+        }
+
+        const freshRecState = useRecommendationStore.getState();
+        const catalogTracks = [
+          ...(freshRecState.baseCatalogue || []),
+          ...(freshRecState.baseSections?.recommended || []),
+          ...(freshRecState.baseSections?.trending || []),
+          ...(freshRecState.baseSections?.popularSongs || []),
+          ...(freshRecState.baseSections?.recentlyAdded || [])
+        ];
+
+        const mappedCatalog: Song[] = catalogTracks
+          .filter((t: any) => t && t.id && t.title)
+          .map((t: any) => {
+            const vid = t.videoId || (t.id.startsWith('yt_') ? t.id.replace('yt_', '') : undefined);
+            return {
+              id: t.id,
+              title: t.title,
+              artist: t.artist || t.composer || 'Unknown Artist',
+              album: t.movieName || t.album || 'Single',
+              durationMs: t.durationMs || 240000,
+              uri: t.fullAudioUrl || t.sourceUrl || '',
+              artworkUrl: t.artworkUrl || '',
+              videoId: vid,
+              source: vid ? 'YOUTUBE' : (t.sourcePlatform || 'OPEN_AUDIO'),
+              language: t.language,
+              genre: t.genre,
+              mood: t.mood,
+              composer: t.composer,
+              createdAt: new Date().toISOString(),
+            };
+          });
+
+        const eligibleCatalog = mappedCatalog.filter((item: Song) => {
+          if (userPreferredLangs.length > 0 && !isSongLanguageEligibleClient(item, userPreferredLangs)) {
+            return false;
+          }
+          return true;
+        });
+
+        let pool = eligibleCatalog.filter(
+          (t) => !freshQueueIds.has(t.id) && !seenCandidateIds.has(t.id) && !currentPlayed.has(t.id)
+        );
+
+        if (pool.length === 0) {
+          pool = eligibleCatalog.filter(
+            (t) => !freshQueueIds.has(t.id) && !seenCandidateIds.has(t.id) && t.id !== referenceSong.id
+          );
+        }
+
+        const shuffledPool = pool.sort(() => Math.random() - 0.5);
+        for (const item of shuffledPool) {
+          if (!seenCandidateIds.has(item.id)) {
+            seenCandidateIds.add(item.id);
+            uniqueNewSongs.push(item);
+            if (uniqueNewSongs.length >= 10) break;
+          }
+        }
+      } catch (catErr) {
+        console.warn('[usePlayerStore] Catalogue fallback error:', catErr);
       }
     }
 
