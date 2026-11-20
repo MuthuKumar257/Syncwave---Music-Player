@@ -27,6 +27,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { Song, UnifiedTrack } from '../types';
 import { ArtworkImage } from '../components/common/ArtworkImage';
 import { SongContextMenu } from '../components/common/SongContextMenu';
+import { SmartPlaylistGeneratorModal } from '../components/recommendations/SmartPlaylistGeneratorModal';
 
 export const LibraryView: React.FC = () => {
   const navigate = useNavigate();
@@ -71,6 +72,7 @@ export const LibraryView: React.FC = () => {
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [playlistToDelete, setPlaylistToDelete] = useState<{ id: string; name: string } | null>(null);
   const [songToDelete, setSongToDelete] = useState<{ id: string; title: string; isDownloaded: boolean } | null>(null);
+  const [isSmartPlaylistOpen, setIsSmartPlaylistOpen] = useState(false);
 
   // Online Download Modal State
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
@@ -251,6 +253,14 @@ export const LibraryView: React.FC = () => {
           >
             <FolderPlus className="w-3.5 h-3.5 text-text-muted" />
             <span>New playlist</span>
+          </button>
+          <button
+            onClick={() => setIsSmartPlaylistOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-surface-elevated hover:bg-surface-hover text-text-secondary hover:text-text-primary border border-hairline text-xs font-medium transition-colors duration-150"
+            title="Generate personalized smart playlist by mood, language & duration"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-accent" />
+            <span>Smart Playlist</span>
           </button>
         </div>
       </div>
@@ -1013,6 +1023,12 @@ export const LibraryView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Smart AI Playlist Generator Modal */}
+      <SmartPlaylistGeneratorModal
+        isOpen={isSmartPlaylistOpen}
+        onClose={() => setIsSmartPlaylistOpen(false)}
+      />
     </div>
   );
 };

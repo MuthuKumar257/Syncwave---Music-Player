@@ -268,22 +268,6 @@ export const HomeScreen: React.FC = () => {
     return Array.from(map.values());
   }, [exploreAllCatalogue, trending, discoverNew, similarToFavouriteSongs]);
 
-  // Safe development diagnostics
-  useEffect(() => {
-    const safeUserId = isAuthenticated ? 'auth_user' : 'guest_user';
-    console.log(
-      `[HomeRenderDiagnostics:Mobile] User: ${safeUserId}, Filter: ${selectedLanguageFilter}, MadeForYou: ${madeForYou.length}, Trending: ${trending.length}, Popular: ${popularSongs.length}, Recent: ${recentlyAdded.length}, Catalogue: ${exploreAllCatalogue.length}`
-    );
-  }, [
-    isAuthenticated,
-    selectedLanguageFilter,
-    madeForYou.length,
-    trending.length,
-    popularSongs.length,
-    recentlyAdded.length,
-    exploreAllCatalogue.length
-  ]);
-
   const hasAnyContent = isAuthenticated
     ? madeForYou.length > 0 ||
       dailyMixes.length > 0 ||

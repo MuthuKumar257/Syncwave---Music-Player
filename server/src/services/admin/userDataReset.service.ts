@@ -104,6 +104,20 @@ export class UserDataResetService {
       };
 
       fs.writeFileSync(backupPath, JSON.stringify(currentData, null, 2), 'utf-8');
+
+      // Automatically prune older backups, retaining only the 2 most recent files
+      try {
+        const backups = fs.readdirSync(dir)
+          .filter((f) => f.startsWith('syncwave_store.backup-') && f.endsWith('.json'))
+          .sort();
+        if (backups.length > 2) {
+          const toDelete = backups.slice(0, backups.length - 2);
+          for (const f of toDelete) {
+            try { fs.unlinkSync(path.resolve(dir, f)); } catch {}
+          }
+        }
+      } catch {}
+
       return backupPath;
     } catch (err) {
       console.warn('[UserDataResetService] Failed to create backup file:', err);

@@ -10,6 +10,7 @@ export interface AuthProvidersStatus {
     redirectFlowEnabled: boolean;
     idTokenEnabled: boolean;
     clientId: string | null;
+    callbackUri?: string;
   };
   otp: {
     enabled: boolean;

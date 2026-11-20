@@ -103,37 +103,37 @@ function resolveBackendCallbackUri(req: Request): string {
   const host = (req.get('x-forwarded-host') || req.get('host') || '').trim();
   const isCloudHost = host && !host.includes('localhost') && !host.includes('127.0.0.1');
 
-  // If server is deployed on cloud (e.g. onrender.com) and GOOGLE_CALLBACK_URL was accidentally left as localhost, prefer cloud URL
-  if (explicit && (!isCloudHost || !explicit.includes('localhost'))) {
+  if (isCloudHost) {
+    if (explicit && !explicit.includes('localhost')) {
+      // If explicit callback matches the current cloud domain or no host was detected, use it
+      if (!host || explicit.includes(host)) {
+        return explicit;
+      }
+    }
+    // Google OAuth strictly requires HTTPS for all public domain redirect URIs
+    return `https://${host}/api/auth/google/callback`;
+  }
+
+  // Local development
+  if (explicit && explicit.includes('localhost')) {
     return explicit;
   }
-
-  const configuredBackend = process.env.BACKEND_URL?.trim().replace(/\/+$/, '');
-  if (configuredBackend) {
-    return `${configuredBackend}/api/auth/google/callback`;
-  }
-
-  if (isCloudHost) {
-    const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
-    return `${proto}://${host}/api/auth/google/callback`;
-  }
-
-  if (explicit) return explicit;
 
   const rawHost = host || 'localhost:3001';
   // Normalize 127.0.0.1 to localhost for OAuth compatibility since Google Cloud Console credentials
   // typically authorize 'http://localhost:3001/api/auth/google/callback'
   const normalizedHost = rawHost.replace(/^127\.0\.0\.1/, 'localhost');
-  return `${req.protocol}://${normalizedHost}/api/auth/google/callback`;
+  return `http://${normalizedHost}/api/auth/google/callback`;
 }
 
 /**
  * GET /api/auth/providers
  * Exposes public authentication capabilities (never secrets)
  */
-router.get('/providers', (_req: Request, res: Response): void => {
+router.get('/providers', (req: Request, res: Response): void => {
   const otpStatus = OtpMailerService.getDeliveryStatus();
   const googleStatus = GoogleOAuthService.getConfigStatus();
+  const callbackUri = resolveBackendCallbackUri(req);
 
   res.json({
     success: true,
@@ -141,7 +141,8 @@ router.get('/providers', (_req: Request, res: Response): void => {
       enabled: googleStatus.redirectFlowEnabled || googleStatus.idTokenEnabled,
       redirectFlowEnabled: googleStatus.redirectFlowEnabled,
       idTokenEnabled: googleStatus.idTokenEnabled,
-      clientId: googleStatus.clientId
+      clientId: googleStatus.clientId,
+      callbackUri
     },
     otp: {
       enabled: otpStatus.configured,

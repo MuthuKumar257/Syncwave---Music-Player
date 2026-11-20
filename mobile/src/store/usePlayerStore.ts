@@ -208,7 +208,9 @@ const fetchAndAppendAutoRecommendations = async (
   if (isFetchingAutoQueue) return;
   isFetchingAutoQueue = true;
   set({ isGeneratingQueue: true });
-  console.log(`[usePlayerStore Mobile] Queue generation started for track: "${referenceTrack.title}" (${referenceTrack.id})`);
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.log(`[usePlayerStore Mobile] Queue generation started for track: "${referenceTrack.title}" (${referenceTrack.id})`);
+  }
 
   try {
     const s = get();
@@ -227,7 +229,9 @@ const fetchAndAppendAutoRecommendations = async (
       limit: 20,
     });
 
-    console.log(`[usePlayerStore Mobile] Recommendation API response received: ${recommendations.length} tracks`);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log(`[usePlayerStore Mobile] Recommendation API response received: ${recommendations.length} tracks`);
+    }
 
     const userLangs = useRecommendationStore.getState().selectedLanguages?.length > 0
       ? useRecommendationStore.getState().selectedLanguages
@@ -235,7 +239,9 @@ const fetchAndAppendAutoRecommendations = async (
 
     const validRecommendations = recommendations.filter((item: Track) => {
       if (userLangs.length > 0 && !isTrackLanguageEligible(item, userLangs)) {
-        console.log(`[usePlayerStore Mobile] Dropped recommendation "${item.title}" outside user languages (${item.language})`);
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log(`[usePlayerStore Mobile] Dropped recommendation "${item.title}" outside user languages (${item.language})`);
+        }
         return false;
       }
       return true;
@@ -258,8 +264,10 @@ const fetchAndAppendAutoRecommendations = async (
       }
     }
 
-    console.log(`[usePlayerStore Mobile] Number of duplicate songs filtered: ${duplicatesFiltered}`);
-    console.log(`[usePlayerStore Mobile] Number of valid songs added to queue: ${uniqueNew.length}`);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log(`[usePlayerStore Mobile] Number of duplicate songs filtered: ${duplicatesFiltered}`);
+      console.log(`[usePlayerStore Mobile] Number of valid songs added to queue: ${uniqueNew.length}`);
+    }
 
     // Fallback: If recommendation API returned insufficient tracks, replenish from shuffled catalogue in user's languages
     if (uniqueNew.length < 5) {
@@ -286,7 +294,9 @@ const fetchAndAppendAutoRecommendations = async (
 
         // If eligible unplayed catalogue is exhausted, reset candidate played-exclusion so songs can cycle
         if (pool.length === 0) {
-          console.log('[usePlayerStore Mobile] Eligible catalogue exhausted. Cycling shuffled catalogue songs.');
+          if (typeof __DEV__ !== 'undefined' && __DEV__) {
+            console.log('[usePlayerStore Mobile] Eligible catalogue exhausted. Cycling shuffled catalogue songs.');
+          }
           pool = eligibleCatalog.filter(
             (t) => !freshQueueIds.has(t.id) && !seenCandidateIds.has(t.id) && t.id !== referenceTrack.id
           );

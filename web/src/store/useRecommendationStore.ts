@@ -216,11 +216,6 @@ export const useRecommendationStore = create<RecommendationStore>((set, get) => 
               baseError: null,
               sectionErrors: { ...get().sectionErrors, baseFeed: '' }
             });
-            console.log(
-              `[HomeDiagnostics:WebStore] Base feed loaded: ${json.data.allAvailable?.length || 0} tracks, Trending: ${
-                json.data.trending?.length || 0
-              }`
-            );
           } else {
             throw new Error(json.message || 'Invalid base catalogue payload');
           }

@@ -165,26 +165,6 @@ export const HomeView: React.FC = () => {
     [feed, filterVisible]
   );
 
-  // Safe development diagnostics
-  useEffect(() => {
-    const safeUserId = preferences?.userId ? `${preferences.userId.slice(0, 8)}...` : 'guest_user';
-    const langs = preferences?.preferredLanguages || [];
-    console.log(
-      `[HomeRenderDiagnostics:Web] User: ${safeUserId}, Languages: [${langs.join(
-        ', '
-      )}], Rec: ${recommendedForYou.length}, Trending: ${trendingInLanguages.length}, Pop: ${
-        popularSongs.length
-      }, Recent: ${recentlyAdded.length}, Catalogue: ${exploreCatalogue.length}`
-    );
-  }, [
-    preferences,
-    recommendedForYou.length,
-    trendingInLanguages.length,
-    popularSongs.length,
-    recentlyAdded.length,
-    exploreCatalogue.length
-  ]);
-
   const triggerPullRefresh = useCallback(() => {
     if (isRefreshing) return;
     setPullDistance(0);

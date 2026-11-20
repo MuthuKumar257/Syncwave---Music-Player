@@ -296,7 +296,6 @@ const fetchAndAppendAutoRecommendations = async (
   if (isFetchingAutoQueue) return;
   isFetchingAutoQueue = true;
   set({ isGeneratingQueue: true });
-  console.log(`[usePlayerStore] Queue generation started for song: "${referenceSong.title}" (${referenceSong.id})`);
 
   try {
     const s = get();
@@ -372,7 +371,6 @@ const fetchAndAppendAutoRecommendations = async (
       if (res.ok) {
         const data = await res.json();
         const rawTracks = Array.isArray(data.tracks) ? data.tracks : [];
-        console.log(`[usePlayerStore] Recommendation API response received: ${rawTracks.length} tracks`);
         const mapped: Song[] = rawTracks
           .filter((t: any) => t && t.id && t.title)
           .map((t: any) => {
@@ -397,7 +395,6 @@ const fetchAndAppendAutoRecommendations = async (
 
         const validTracks = mapped.filter((cand: Song) => {
           if (userPreferredLangs.length > 0 && !isSongLanguageEligibleClient(cand, userPreferredLangs)) {
-            console.log(`[usePlayerStore] Dropped song candidate "${cand.title}" outside user languages (${cand.language})`);
             return false;
           }
           return true;
@@ -500,10 +497,6 @@ const fetchAndAppendAutoRecommendations = async (
         console.warn('[usePlayerStore] Catalogue fallback error:', catErr);
       }
     }
-
-    console.log(`[usePlayerStore] Number of songs discovered: ${candidates.length}`);
-    console.log(`[usePlayerStore] Number of duplicate songs filtered: ${duplicatesFiltered}`);
-    console.log(`[usePlayerStore] Number of valid songs added to queue: ${uniqueNewSongs.length}`);
 
     if (uniqueNewSongs.length > 0) {
       set({
